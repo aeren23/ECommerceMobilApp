@@ -7,30 +7,50 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useUser } from '../../context/UserContext';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useUser();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun');
       return;
     }
 
-    // Basit doğrulama - gerçek uygulamada API çağrısı yapılır
-    Alert.alert(
-      'Başarılı!', 
-      'Giriş işlemi başarılı!',
-      [
-        {
-          text: 'Tamam',
-          onPress: () => router.back()
-        }
-      ]
-    );
+    setIsLoading(true);
+    
+    try {
+      const success = await login(email, password);
+      
+      if (success) {
+        Alert.alert(
+          'Başarılı! 🎉', 
+          'Giriş işlemi başarılı!',
+          [
+            {
+              text: 'Tamam',
+              onPress: () => router.back()
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Hata', 
+          'Email veya şifre hatalı. Şifreniz en az 4 karakter olmalıdır.'
+        );
+      }
+    } catch (error) {
+      Alert.alert('Hata', 'Bir hata oluştu. Lütfen tekrar deneyin.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -71,8 +91,16 @@ export default function LoginScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <Text style={styles.loginButtonText}>Giriş Yap</Text>
+          <TouchableOpacity 
+            style={[styles.loginButton, isLoading && styles.disabledButton]} 
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.loginButtonText}>Giriş Yap</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -177,6 +205,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.7,
   },
   registerLink: {
     marginTop: 20,

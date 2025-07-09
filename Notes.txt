@@ -1,0 +1,63 @@
+// İlerde böyle olacak:
+data/
+├── api/
+│   ├── products.ts → await fetch('/api/products')
+│   ├── categories.ts → await fetch('/api/categories')
+│   └── users.ts → await fetch('/api/users')
+
+context/ Klasörü (Dynamic State)
+context/
+├── CartContext.tsx → AsyncStorage (cihazda)
+├── AuthContext.tsx → SecureStore (cihazda)
+└── ThemeContext.tsx → AsyncStorage (cihazda)
+
+
+❌ Props Drilling:
+App → Header → Navigation → UserInfo (props geçmek zorunda)
+App → Content → Profile → UserActions (props geçmek zorunda)
+
+✅ Context:
+App (Provider) → Tüm componentler direkt erişir
+
+
+🔧 Provider'ın Görevi:
+State Yönetimi: Kullanıcı durumunu tutar
+Fonksiyon Sağlama: Login, logout gibi işlemleri sağlar
+Veri Dağıtımı: Tüm alt componentlere veri sağlar
+Sarmalama: Children componentlerini sarar
+
+UserProvider (En üst seviye)
+├── CartProvider
+    ├── Stack (Navigation)
+        ├── (tabs)
+        │   ├── index.tsx       ← useUser() kullanabilir
+        │   ├── cart.tsx        ← useUser() kullanabilir
+        │   ├── profile.tsx     ← useUser() kullanabilir
+        │   └── search.tsx      ← useUser() kullanabilir
+        ├── auth
+        │   ├── login.tsx       ← useUser() kullanabilir
+        │   └── register.tsx    ← useUser() kullanabilir
+        └── product/[id].tsx    ← useUser() kullanabilir
+
+
+
+🎣 Custom Hook:
+    Ne İşe Yarar:
+    Kolay Erişim: Context'e basit şekilde erişim
+    Hata Kontrolü: Provider dışında kullanılırsa hata verir
+    Tip Güvenliği: Doğru tipleri döndürür
+
+
+Veri Akışı Nasıl Çalışır?
+    🔄 Step by Step:
+        1. Başlangıç:
+            // UserProvider mount olduğunda
+            useEffect(() => {
+            loadUserData(); // AsyncStorage'dan kullanıcı verilerini yükle
+            }, []);
+        
+        2. Login İşlemi:
+            
+        3. State değişimi 
+            // Provider'da state değişir
+            setUser(newUserData);

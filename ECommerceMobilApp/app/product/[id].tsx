@@ -10,14 +10,22 @@ import {
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { products } from '../../data/products';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { products, tagConfig } from '../../data/products';
+import { useCart } from '../../context/CartContext';
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams();
   const [quantity, setQuantity] = useState(1);
+  const insets = useSafeAreaInsets();
+  const { addToCart: addToCartContext, cartItems } = useCart();
   
   // ID'ye göre ürünü bul
   const product = products.find(p => p.id === id);
+
+  // Sepetteki bu ürünün miktarını kontrol et
+  const cartItem = cartItems.find(item => item.id === id);
+  const currentCartQuantity = cartItem ? cartItem.quantity : 0;
 
   if (!product) {
     return (
@@ -47,12 +55,40 @@ export default function ProductDetailScreen() {
     }
   };
 
-  const addToCart = () => {
+  const handleAddToCart = () => {
+    if (product.stock === 0) {
+      Alert.alert('Uyarı', 'Bu ürün stokta bulunmamaktadır.');
+      return;
+    }
+
+    if (currentCartQuantity + quantity > product.stock) {
+      Alert.alert(
+        'Stok Uyarısı',
+        `Bu üründen en fazla ${product.stock} adet satın alabilirsiniz. Sepetinizde zaten ${currentCartQuantity} adet var.`
+      );
+      return;
+    }
+
+    addToCartContext({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      category: product.category,
+      maxStock: product.stock,
+    }, quantity);
+
     Alert.alert(
-      'Sepete Eklendi!',
+      'Sepete Eklendi! 🛒',
       `${product.name} - ${quantity} adet sepetinize eklendi.`,
-      [{ text: 'Tamam', style: 'default' }]
+      [
+        { text: 'Tamam', style: 'default' },
+        { text: 'Sepete Git', onPress: () => router.push('/(tabs)/cart') }
+      ]
     );
+
+    // Miktar seçiciyi sıfırla
+    setQuantity(1);
   };
 
   return (
@@ -61,6 +97,28 @@ export default function ProductDetailScreen() {
         {/* Ürün Resmi */}
         <View style={styles.imageContainer}>
           <Image source={{ uri: product.image }} style={styles.productImage} />
+          
+          {/* Etiketler */}
+          {product.tags && product.tags.length > 0 && (
+            <View style={styles.tagContainer}>
+              {product.tags.map((tag, index) => {
+                const config = tagConfig[tag as keyof typeof tagConfig];
+                if (!config) return null;
+                
+                return (
+                  <View 
+                    key={index} 
+                    style={[styles.tag, { backgroundColor: config.bgColor }]}
+                  >
+                    <Text style={styles.tagIcon}>{config.icon}</Text>
+                    <Text style={[styles.tagText, { color: config.color }]}>
+                      {config.text}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Ürün Bilgileri */}
@@ -75,9 +133,24 @@ export default function ProductDetailScreen() {
             </Text>
           </View>
 
-          <Text style={styles.productPrice}>
-            ₺{product.price.toLocaleString()}
-          </Text>
+          {/* Fiyat ve indirim */}
+          <View style={styles.priceContainer}>
+            <Text style={styles.productPrice}>
+              ₺{product.price.toLocaleString()}
+            </Text>
+            {product.originalPrice && (
+              <Text style={styles.originalPrice}>
+                ₺{product.originalPrice.toLocaleString()}
+              </Text>
+            )}
+            {product.originalPrice && (
+              <View style={styles.discountBadge}>
+                <Text style={styles.discountText}>
+                  %{Math.round((1 - product.price / product.originalPrice) * 100)} İndirim
+                </Text>
+              </View>
+            )}
+          </View>
 
           <Text style={styles.productDescription}>
             {product.description}
@@ -124,13 +197,13 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* Alt Butonlar */}
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity 
           style={[
             styles.addToCartButton,
             product.stock === 0 && styles.disabledButton
           ]}
-          onPress={addToCart}
+          onPress={handleAddToCart}
           disabled={product.stock === 0}
         >
           <Text style={styles.addToCartButtonText}>
@@ -153,12 +226,38 @@ const styles = StyleSheet.create({
   imageContainer: {
     backgroundColor: 'white',
     padding: 20,
+    position: 'relative',
   },
   productImage: {
     width: '100%',
     height: 300,
     borderRadius: 12,
     backgroundColor: '#f0f0f0',
+  },
+  tagContainer: {
+    position: 'absolute',
+    top: 30,
+    left: 30,
+    right: 30,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  tagIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   productInfo: {
     backgroundColor: 'white',
@@ -191,11 +290,33 @@ const styles = StyleSheet.create({
     color: '#28a745',
     fontWeight: '600',
   },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
   productPrice: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#B8860B',
-    marginBottom: 15,
+    marginRight: 10,
+  },
+  originalPrice: {
+    fontSize: 18,
+    color: '#999',
+    textDecorationLine: 'line-through',
+    marginRight: 10,
+  },
+  discountBadge: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  discountText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   productDescription: {
     fontSize: 16,
@@ -263,7 +384,6 @@ const styles = StyleSheet.create({
   bottomContainer: {
     backgroundColor: 'white',
     padding: 20,
-    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },

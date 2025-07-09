@@ -8,14 +8,34 @@ import {
   Alert,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useUser } from '../../context/UserContext';
 
 export default function ProfileScreen() {
+  const { user, isLoggedIn, logout } = useUser();
+
   const handleLogin = () => {
     router.push('/auth/login');
   };
 
   const handleRegister = () => {
     router.push('/auth/register');
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Çıkış Yap',
+      'Çıkış yapmak istediğinize emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Çıkış Yap', 
+          onPress: async () => {
+            await logout();
+            Alert.alert('Başarılı', 'Çıkış işlemi tamamlandı.');
+          }
+        }
+      ]
+    );
   };
 
   const showFeature = (feature: string) => {
@@ -33,21 +53,39 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>👤</Text>
           </View>
-          <Text style={styles.welcomeText}>Merhaba!</Text>
-          <Text style={styles.loginPrompt}>
-            Alışverişe başlamak için giriş yapın
-          </Text>
+          {isLoggedIn ? (
+            <>
+              <Text style={styles.welcomeText}>Merhaba, {user?.name}!</Text>
+              <Text style={styles.userInfo}>📧 {user?.email}</Text>
+              <Text style={styles.userInfo}>📞 {user?.phone}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.welcomeText}>Merhaba!</Text>
+              <Text style={styles.loginPrompt}>
+                Alışverişe başlamak için giriş yapın
+              </Text>
+            </>
+          )}
         </View>
 
-        <View style={styles.authButtons}>
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <Text style={styles.loginButtonText}>Giriş Yap</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-            <Text style={styles.registerButtonText}>Üye Ol</Text>
-          </TouchableOpacity>
-        </View>
+        {!isLoggedIn ? (
+          <View style={styles.authButtons}>
+            <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+              <Text style={styles.loginButtonText}>Giriş Yap</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
+              <Text style={styles.registerButtonText}>Üye Ol</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.authButtons}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>Çıkış Yap</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.menuSection}>
           <TouchableOpacity 
@@ -149,9 +187,16 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   loginPrompt: {
-    fontSize: 14,
     color: '#666',
+    fontSize: 14,
     textAlign: 'center',
+    marginBottom: 10,
+  },
+  userInfo: {
+    color: '#666',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 5,
   },
   authButtons: {
     marginBottom: 30,
@@ -177,6 +222,18 @@ const styles = StyleSheet.create({
   },
   registerButtonText: {
     color: '#B8860B',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  logoutButton: {
+    backgroundColor: '#ff4444',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  logoutButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',

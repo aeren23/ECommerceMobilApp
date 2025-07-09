@@ -7,17 +7,22 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useUser } from '../../context/UserContext';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { register } = useUser();
 
-  const handleRegister = () => {
-    if (!name || !email || !password || !confirmPassword) {
+  const handleRegister = async () => {
+    if (!name || !email || !password || !confirmPassword || !phone) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun');
       return;
     }
@@ -27,22 +32,45 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert('Hata', 'Şifre en az 6 karakter olmalıdır');
+    if (password.length < 4) {
+      Alert.alert('Hata', 'Şifre en az 4 karakter olmalıdır');
       return;
     }
 
-    // Basit doğrulama - gerçek uygulamada API çağrısı yapılır
-    Alert.alert(
-      'Başarılı!', 
-      'Hesabınız başarıyla oluşturuldu!',
-      [
-        {
-          text: 'Tamam',
-          onPress: () => router.back()
-        }
-      ]
-    );
+    if (phone.length < 10) {
+      Alert.alert('Hata', 'Geçerli bir telefon numarası girin');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const success = await register({
+        name,
+        email,
+        password,
+        phone,
+      });
+
+      if (success) {
+        Alert.alert(
+          'Başarılı! 🎉', 
+          'Hesabınız başarıyla oluşturuldu!',
+          [
+            {
+              text: 'Tamam',
+              onPress: () => router.back()
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Hata', 'Bu email ile zaten kayıt bulunuyor veya bilgilerinizi kontrol edin.');
+      }
+    } catch (error) {
+      Alert.alert('Hata', 'Bir hata oluştu. Lütfen tekrar deneyin.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -61,7 +89,7 @@ export default function RegisterScreen() {
           <Text style={styles.subtitle}>Yeni hesabınızı oluşturun</Text>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Ad Soyad</Text>
+            <Text style={styles.label}>Ad Soyad *</Text>
             <TextInput
               style={styles.input}
               placeholder="Adınızı ve soyadınızı girin"
@@ -71,7 +99,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>E-posta</Text>
+            <Text style={styles.label}>E-posta *</Text>
             <TextInput
               style={styles.input}
               placeholder="ornek@email.com"
@@ -83,10 +111,21 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Şifre</Text>
+            <Text style={styles.label}>Telefon *</Text>
             <TextInput
               style={styles.input}
-              placeholder="En az 6 karakter"
+              placeholder="0555 123 45 67"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Şifre *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="En az 4 karakter"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -94,7 +133,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Şifre Tekrar</Text>
+            <Text style={styles.label}>Şifre Tekrar *</Text>
             <TextInput
               style={styles.input}
               placeholder="Şifrenizi tekrar girin"
@@ -104,8 +143,16 @@ export default function RegisterScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-            <Text style={styles.registerButtonText}>Hesap Oluştur</Text>
+          <TouchableOpacity 
+            style={[styles.registerButton, isLoading && styles.disabledButton]} 
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.registerButtonText}>Hesap Oluştur</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -153,12 +200,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 15,
     justifyContent: 'center',
   },
   form: {
     backgroundColor: 'white',
-    padding: 30,
+    padding: 20,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: {
@@ -170,30 +217,30 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   welcomeText: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
     marginBottom: 5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 30,
-  },
-  inputContainer: {
     marginBottom: 20,
   },
+  inputContainer: {
+    marginBottom: 15,
+  },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   input: {
     backgroundColor: '#f8f9fa',
-    padding: 15,
+    padding: 12,
     borderRadius: 10,
     fontSize: 16,
     borderWidth: 1,
@@ -201,22 +248,26 @@ const styles = StyleSheet.create({
   },
   registerButton: {
     backgroundColor: '#B8860B',
-    padding: 18,
+    padding: 15,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   registerButtonText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.7,
+  },
   loginLink: {
-    marginTop: 20,
+    marginTop: 15,
     alignItems: 'center',
   },
   loginLinkText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
   },
   loginLinkBold: {
