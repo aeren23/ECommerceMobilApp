@@ -35,6 +35,7 @@ export default function TabsLayout() {
           borderTopColor: '#e0e0e0',
         }
       }}>
+      
       <Tabs.Screen
         name="index"
         options={{

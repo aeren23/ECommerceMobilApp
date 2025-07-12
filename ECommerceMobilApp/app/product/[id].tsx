@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,24 +8,75 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { products, tagConfig } from '../../data/products';
+import { Product, tagConfig } from '../../data/products';
 import { useCart } from '../../context/CartContext';
+import { ProductAPI } from '../../services/ApiService';
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams();
   const [quantity, setQuantity] = useState(1);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const insets = useSafeAreaInsets();
   const { addToCart: addToCartContext, cartItems } = useCart();
-  
-  // ID'ye göre ürünü bul
-  const product = products.find(p => p.id === id);
 
+  // Ürünü API'den yükle
+  useEffect(() => {
+    loadProduct();
+  }, [id]);
+
+  const loadProduct = async () => {
+    try {
+      setIsLoading(true);
+      const response = await ProductAPI.getById(id as string);
+      
+      if (response.success && response.value) {
+        setProduct(response.value);
+      } else {
+        console.error('Failed to load product:', response.errorMessage);
+        Alert.alert('Hata', 'Ürün yüklenirken bir hata oluştu');
+      }
+    } catch (error) {
+      console.error('Error loading product:', error);
+      Alert.alert('Hata', 'Ürün yüklenirken bir hata oluştu');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Kategori adını bul
+  const getCategoryName = (categoryId: string): string => {
+    const nameMap: { [key: string]: string } = {
+      'a1b2c3d4-e5f6-7890-abcd-ef1234567890': 'Elektronik',
+      'b2c3d4e5-f6g7-8901-bcde-f12345678901': 'Giyim',
+      'c3d4e5f6-g7h8-9012-cdef-123456789012': 'Ev & Bahçe',
+      'd4e5f6g7-h8i9-0123-def1-234567890123': 'Spor',
+      'e5f6g7h8-i9j0-1234-ef12-345678901234': 'Kitap',
+      'f6g7h8i9-j0k1-2345-f123-456789012345': 'Kozmetik',
+      'g7h8i9j0-k1l2-3456-1234-567890123456': 'Oyuncak',
+      'h8i9j0k1-l2m3-4567-2345-678901234567': 'Mutfak',
+    };
+    return nameMap[categoryId] || 'Diğer';
+  };
+  
   // Sepetteki bu ürünün miktarını kontrol et
   const cartItem = cartItems.find(item => item.id === id);
   const currentCartQuantity = cartItem ? cartItem.quantity : 0;
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#B8860B" />
+          <Text style={styles.loadingText}>Ürün yükleniyor...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!product) {
     return (
@@ -74,7 +125,7 @@ export default function ProductDetailScreen() {
       name: product.name,
       price: product.price,
       image: product.image,
-      category: product.category,
+      category: getCategoryName(product.categoryId),
       maxStock: product.stock,
     }, quantity);
 
@@ -124,7 +175,7 @@ export default function ProductDetailScreen() {
         {/* Ürün Bilgileri */}
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{product.name}</Text>
-          <Text style={styles.productCategory}>{product.category}</Text>
+          <Text style={styles.productCategory}>{getCategoryName(product.categoryId)}</Text>
           
           <View style={styles.ratingContainer}>
             <Text style={styles.rating}>⭐ {product.rating}</Text>
@@ -155,6 +206,12 @@ export default function ProductDetailScreen() {
           <Text style={styles.productDescription}>
             {product.description}
           </Text>
+
+          {/* Satıcı Bilgisi */}
+          <View style={styles.sellerContainer}>
+            <Text style={styles.sellerLabel}>Satıcı:</Text>
+            <Text style={styles.sellerName}>{product.seller || 'Bilinmiyor'}</Text>
+          </View>
 
           {/* Miktar Seçici */}
           <View style={styles.quantityContainer}>
@@ -319,10 +376,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   productDescription: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
-    lineHeight: 24,
+    lineHeight: 20,
     marginBottom: 20,
+  },
+  sellerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  sellerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 10,
+  },
+  sellerName: {
+    fontSize: 14,
+    color: '#B8860B',
+    fontWeight: '500',
   },
   quantityContainer: {
     flexDirection: 'row',
@@ -421,5 +497,16 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 10,
   },
 });

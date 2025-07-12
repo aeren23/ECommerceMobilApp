@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ApiService, { CartAPI } from '../services/ApiService';
+import { useUser } from './UserContext';
 
 // Cart item type
 export interface CartItem {

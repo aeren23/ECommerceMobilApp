@@ -13,16 +13,17 @@ import { router } from 'expo-router';
 import { useUser } from '../../context/UserContext';
 
 export default function RegisterScreen() {
-  const [name, setName] = useState('');
+  const [fullName, setFullName] = useState('');  // name -> fullName
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');  // phone -> phoneNumber
+  const [address, setAddress] = useState('');  // Yeni alan
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useUser();
 
   const handleRegister = async () => {
-    if (!name || !email || !password || !confirmPassword || !phone) {
+    if (!fullName || !email || !password || !confirmPassword || !phoneNumber || !address) {
       Alert.alert('Hata', 'Lütfen tüm alanları doldurun');
       return;
     }
@@ -32,12 +33,12 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (password.length < 4) {
-      Alert.alert('Hata', 'Şifre en az 4 karakter olmalıdır');
+    if (password.length < 6) {  // API daha güçlü şifre isteyebilir
+      Alert.alert('Hata', 'Şifre en az 6 karakter olmalıdır');
       return;
     }
 
-    if (phone.length < 10) {
+    if (phoneNumber.length < 10) {
       Alert.alert('Hata', 'Geçerli bir telefon numarası girin');
       return;
     }
@@ -45,28 +46,31 @@ export default function RegisterScreen() {
     setIsLoading(true);
 
     try {
-      const success = await register({
-        name,
+      const result = await register({
+        fullName,    // API field name'ine uygun
         email,
         password,
-        phone,
+        phoneNumber, // API field name'ine uygun
+        address,     // Yeni alan
       });
 
-      if (success) {
+      if (result.success) {
         Alert.alert(
           'Başarılı! 🎉', 
-          'Hesabınız başarıyla oluşturuldu!',
+          'Hesabınız başarıyla oluşturuldu! Giriş ekranına yönlendiriliyorsunuz.',
           [
             {
               text: 'Tamam',
-              onPress: () => router.back()
+              onPress: () => router.push('/auth/login') // Login sayfasına yönlendir
             }
           ]
         );
       } else {
-        Alert.alert('Hata', 'Bu email ile zaten kayıt bulunuyor veya bilgilerinizi kontrol edin.');
+        // API'den gelen hata mesajını göster
+        Alert.alert('Kayıt Hatası', result.message || 'Kayıt işlemi başarısız oldu.');
       }
     } catch (error) {
+      console.error('Register catch error:', error);
       Alert.alert('Hata', 'Bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setIsLoading(false);
@@ -93,8 +97,8 @@ export default function RegisterScreen() {
             <TextInput
               style={styles.input}
               placeholder="Adınızı ve soyadınızı girin"
-              value={name}
-              onChangeText={setName}
+              value={fullName}
+              onChangeText={setFullName}
             />
           </View>
 
@@ -115,9 +119,21 @@ export default function RegisterScreen() {
             <TextInput
               style={styles.input}
               placeholder="0555 123 45 67"
-              value={phone}
-              onChangeText={setPhone}
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Adres *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ev/iş adresinizi girin"
+              value={address}
+              onChangeText={setAddress}
+              multiline
+              numberOfLines={2}
             />
           </View>
 
@@ -125,7 +141,7 @@ export default function RegisterScreen() {
             <Text style={styles.label}>Şifre *</Text>
             <TextInput
               style={styles.input}
-              placeholder="En az 4 karakter"
+              placeholder="En az 6 karakter"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -200,12 +216,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 15,
+    padding: 12,
     justifyContent: 'center',
   },
   form: {
     backgroundColor: 'white',
-    padding: 20,
+    padding: 16,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: {
@@ -217,45 +233,45 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputContainer: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   input: {
     backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 10,
-    fontSize: 16,
+    padding: 10,
+    borderRadius: 8,
+    fontSize: 15,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
   registerButton: {
     backgroundColor: '#B8860B',
-    padding: 15,
+    padding: 12,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
   },
   registerButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   disabledButton: {
@@ -263,11 +279,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   loginLink: {
-    marginTop: 15,
+    marginTop: 12,
     alignItems: 'center',
   },
   loginLinkText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
   },
   loginLinkBold: {

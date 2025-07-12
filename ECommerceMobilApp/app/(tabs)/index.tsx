@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,16 +9,96 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { products, categories, Product, tagConfig } from '../../data/products';
+import { Product, tagConfig } from '../../data/products';
 import { useCart } from '../../context/CartContext';
+import { ProductAPI, CategoryAPI, CategoryDto } from '../../services/ApiService';
 
 export default function HomeScreen() {
   // useState hook'larını kullanıyoruz
   const [selectedCategory, setSelectedCategory] = useState('Tümü');
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>(products);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>(['Tümü']);
+  const [categoriesData, setCategoriesData] = useState<CategoryDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { addToCart } = useCart();
+
+  // Kategorileri API'den yükle (Cache'li)
+  const loadCategories = async () => {
+    try {
+      console.log('🔄 Loading categories...');
+      const response = await CategoryAPI.getAll();
+      
+      if (response.success && response.value) {
+        console.log('✅ Categories loaded successfully');
+        setCategoriesData(response.value);
+        // Kategori listesini güncelle - "Tümü" seçeneğini ekle
+        const categoryNames = ['Tümü', ...response.value.map(cat => cat.name)];
+        setCategories(categoryNames);
+      } else {
+        console.error('Categories load failed:', response.errorMessage);
+        // Varsayılan kategoriler kalsın
+        setCategories([
+          'Tümü',
+          'Elektronik',
+          'Giyim',
+          'Ev & Bahçe',
+          'Spor',
+          'Kitap',
+          'Kozmetik',
+          'Oyuncak',
+          'Mutfak',
+        ]);
+      }
+    } catch (error) {
+      console.error('Categories load error:', error);
+      // Varsayılan kategoriler kalsın
+      setCategories([
+        'Tümü',
+        'Elektronik',
+        'Giyim',
+        'Ev & Bahçe',
+        'Spor',
+        'Kitap',
+        'Kozmetik',
+        'Oyuncak',
+        'Mutfak',
+      ]);
+    }
+  };
+
+  // Ürünleri API'den yükle - sadece component mount olduğunda
+  useEffect(() => {
+    console.log('📱 HomeScreen mounted - Loading data...');
+    loadCategories();
+    loadProducts();
+  }, []); // Boş dependency array - sadece mount'ta çalışır
+
+  // Ürünleri API'den yükle (Cache'li)
+  const loadProducts = async () => {
+    try {
+      setIsLoading(true);
+      console.log('🔄 Loading products...');
+      const response = await ProductAPI.getAll();
+      
+      if (response.success && response.value) {
+        console.log('✅ Products loaded successfully');
+        setProducts(response.value);
+        setFilteredProducts(response.value);
+      } else {
+        console.error('Failed to load products:', response.errorMessage);
+        Alert.alert('Hata', 'Ürünler yüklenirken bir hata oluştu');
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+      Alert.alert('Hata', 'Ürünler yüklenirken bir hata oluştu');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Kategori filtreleme fonksiyonu
   const filterByCategory = (category: string) => {
@@ -27,9 +107,55 @@ export default function HomeScreen() {
     if (category === 'Tümü') {
       setFilteredProducts(products);
     } else {
-      const filtered = products.filter(product => product.category === category);
+      // Önce gerçek kategori verilerinden ID'yi bul
+      const categoryId = getCategoryId(category);
+      const filtered = products.filter(product => product.categoryId === categoryId);
       setFilteredProducts(filtered);
     }
+  };
+
+  // Kategori ID'sini bul
+  const getCategoryId = (categoryName: string): string => {
+    // Önce gerçek kategori verilerinden ara
+    const category = categoriesData.find(cat => cat.name === categoryName);
+    if (category) {
+      return category.id;
+    }
+    
+    // Fallback - eski hardcoded mapping
+    const categoryMap: { [key: string]: string } = {
+      'Elektronik': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      'Giyim': 'b2c3d4e5-f6g7-8901-bcde-f12345678901',
+      'Ev & Bahçe': 'c3d4e5f6-g7h8-9012-cdef-123456789012',
+      'Spor': 'd4e5f6g7-h8i9-0123-def1-234567890123',
+      'Kitap': 'e5f6g7h8-i9j0-1234-ef12-345678901234',
+      'Kozmetik': 'f6g7h8i9-j0k1-2345-f123-456789012345',
+      'Oyuncak': 'g7h8i9j0-k1l2-3456-1234-567890123456',
+      'Mutfak': 'h8i9j0k1-l2m3-4567-2345-678901234567',
+    };
+    return categoryMap[categoryName] || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  };
+
+  // Kategori adını bul
+  const getCategoryName = (categoryId: string): string => {
+    // Önce gerçek kategori verilerinden ara
+    const category = categoriesData.find(cat => cat.id === categoryId);
+    if (category) {
+      return category.name;
+    }
+    
+    // Fallback - eski hardcoded mapping
+    const nameMap: { [key: string]: string } = {
+      'a1b2c3d4-e5f6-7890-abcd-ef1234567890': 'Elektronik',
+      'b2c3d4e5-f6g7-8901-bcde-f12345678901': 'Giyim',
+      'c3d4e5f6-g7h8-9012-cdef-123456789012': 'Ev & Bahçe',
+      'd4e5f6g7-h8i9-0123-def1-234567890123': 'Spor',
+      'e5f6g7h8-i9j0-1234-ef12-345678901234': 'Kitap',
+      'f6g7h8i9-j0k1-2345-f123-456789012345': 'Kozmetik',
+      'g7h8i9j0-k1l2-3456-1234-567890123456': 'Oyuncak',
+      'h8i9j0k1-l2m3-4567-2345-678901234567': 'Mutfak',
+    };
+    return nameMap[categoryId] || 'Diğer';
   };
 
   // Hızlı sepete ekleme fonksiyonu
@@ -44,7 +170,7 @@ export default function HomeScreen() {
       name: product.name,
       price: product.price,
       image: product.image,
-      category: product.category,
+      category: getCategoryName(product.categoryId),
       maxStock: product.stock,
     });
 
@@ -58,9 +184,11 @@ export default function HomeScreen() {
     );
   };
 
-  // İndirimli ürünleri filtrele
-  const discountedProducts = products.filter(product => 
-    product.originalPrice && product.originalPrice > product.price
+  // İndirimli ürünleri filtrele - useMemo ile optimize et
+  const discountedProducts = useMemo(() => 
+    filteredProducts.filter(product => 
+      product.originalPrice && product.originalPrice > product.price
+    ), [filteredProducts]
   );
 
   // Fırsatlar kartı komponenti
@@ -104,8 +232,8 @@ export default function HomeScreen() {
     );
   };
 
-  // Ürün kartı komponenti
-  const ProductCard = ({ item }: { item: Product }) => (
+  // Ürün kartı komponenti - React.memo ile optimize edildi
+  const ProductCard = React.memo(({ item }: { item: Product }) => (
     <TouchableOpacity 
       style={styles.productCard}
       onPress={() => router.push(`/product/${item.id}`)}
@@ -157,6 +285,12 @@ export default function HomeScreen() {
           <Text style={styles.rating}>⭐ {item.rating}</Text>
           <Text style={styles.stock}>Stok: {item.stock}</Text>
         </View>
+        
+        {/* Satıcı bilgisi */}
+        <View style={styles.sellerContainer}>
+          <Text style={styles.sellerLabel}>Satıcı:</Text>
+          <Text style={styles.sellerName}>{item.seller || 'Bilinmiyor'}</Text>
+        </View>
         <TouchableOpacity
           style={[
             styles.addToCartButton,
@@ -171,7 +305,11 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  );
+  ), (prevProps, nextProps) => {
+    // Shallow comparison for performance
+    return prevProps.item.id === nextProps.item.id && 
+           prevProps.item.stock === nextProps.item.stock;
+  });
 
   // Kategori butonu komponenti
   const CategoryButton = ({ category }: { category: string }) => (
@@ -193,6 +331,26 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
+  // Manuel yenileme fonksiyonu (cache temizleyerek)
+  const refreshData = async () => {
+    try {
+      console.log('🔄 Manual refresh triggered - Clearing cache...');
+      
+      // Cache'i temizle
+      await CategoryAPI.clearCache();
+      await ProductAPI.clearCache();
+      
+      // Verileri yeniden yükle
+      await loadCategories();
+      await loadProducts();
+      
+      console.log('✅ Data refreshed successfully');
+    } catch (error) {
+      console.error('❌ Manual refresh failed:', error);
+      Alert.alert('Hata', 'Yenileme sırasında bir hata oluştu');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header  */}
@@ -203,25 +361,33 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* Kategoriler */}
-        <View style={styles.categoriesContainer}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContent}
-          >
-            {categories.map((category) => (
-              <CategoryButton key={category} category={category} />
-            ))}
-          </ScrollView>
+      {/* Loading */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#B8860B" />
+          <Text style={styles.loadingText}>Ürünler yükleniyor...</Text>
         </View>
-        
-      {/* Scrollable İçerik */}
-      <ScrollView 
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      ) : (
+        <>
+          {/* Kategoriler */}
+          <View style={styles.categoriesContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoriesContent}
+            >
+              {categories.map((category) => (
+                <CategoryButton key={category} category={category} />
+              ))}
+            </ScrollView>
+          </View>
+          
+          {/* Scrollable İçerik */}
+          <ScrollView 
+            style={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
         
 
         {/* Kaçırılmaz Fırsatlar */}
@@ -244,23 +410,29 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Ürün Grid */}
+        {/* Ürün Grid - FlatList ile optimize edildi */}
         <View style={styles.productsGrid}>
-          {filteredProducts.map((product, index) => {
-            if (index % 2 === 0) {
-              return (
-                <View key={`row-${index}`} style={styles.row}>
-                  <ProductCard item={product} />
-                  {filteredProducts[index + 1] && (
-                    <ProductCard item={filteredProducts[index + 1]} />
-                  )}
-                </View>
-              );
-            }
-            return null;
-          })}
+          <FlatList
+            data={filteredProducts}
+            renderItem={({ item }) => <ProductCard item={item} />}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={styles.row}
+            showsVerticalScrollIndicator={false}
+            // Performans optimizasyonları
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            windowSize={10}
+            initialNumToRender={10}
+            getItemLayout={(data, index) => (
+              {length: 220, offset: 220 * Math.floor(index / 2), index}
+            )}
+          />
         </View>
       </ScrollView>
+      </>
+      )}
     </SafeAreaView>
   );
 }
@@ -511,6 +683,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 5,
+  },
+  sellerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sellerLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginRight: 5,
+  },
+  sellerName: {
+    fontSize: 11,
+    color: '#B8860B',
+    fontWeight: '500',
   },
   rating: {
     fontSize: 12,
@@ -535,5 +723,16 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 10,
   },
 });

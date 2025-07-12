@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,30 +8,82 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { products, Product } from '../../data/products';
+import { Product } from '../../data/products';
+import { ProductAPI } from '../../services/ApiService';
 
 export default function SearchScreen() {
   const [searchText, setSearchText] = useState('');
-  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Arama fonksiyonu
-  const handleSearch = (text: string) => {
-    setSearchText(text);
+  // Debounce timer
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Ürünleri API'den yükle
+  useEffect(() => {
+    loadProducts();
     
-    if (text.length > 0) {
-      const filtered = products.filter(product =>
-        product.name.toLowerCase().includes(text.toLowerCase()) ||
-        product.category.toLowerCase().includes(text.toLowerCase())
-      );
-      setSearchResults(filtered);
-    } else {
-      setSearchResults([]);
+    // Cleanup function
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await ProductAPI.getAll();
+      
+      if (response.success && response.value) {
+        setAllProducts(response.value);
+      } else {
+        console.error('Failed to load products:', response.errorMessage);
+      }
+    } catch (error) {
+      console.error('Error loading products:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const SearchResultItem = ({ item }: { item: Product }) => (
+  // Arama fonksiyonu (debounce'li)
+  const handleSearch = (text: string) => {
+    setSearchText(text);
+    
+    // Önceki timeout'u temizle
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    if (text.length > 0) {
+      setIsSearching(true);
+      
+      // 300ms bekleyip arama yap
+      const timeout = setTimeout(() => {
+        const filtered = allProducts.filter(product =>
+          product.name.toLowerCase().includes(text.toLowerCase()) ||
+          (product.category && product.category.name && product.category.name.toLowerCase().includes(text.toLowerCase())) ||
+          (product.seller && product.seller.toLowerCase().includes(text.toLowerCase()))
+        );
+        setSearchResults(filtered);
+        setIsSearching(false);
+      }, 300);
+      
+      setSearchTimeout(timeout);
+    } else {
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  };
+
+  const SearchResultItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.resultItem}
       onPress={() => router.push(`/product/${item.id}`)}
@@ -39,8 +91,13 @@ export default function SearchScreen() {
       <Image source={{ uri: item.image }} style={styles.resultImage} />
       <View style={styles.resultInfo}>
         <Text style={styles.resultName}>{item.name}</Text>
-        <Text style={styles.resultPrice}>₺{item.price.toLocaleString()}</Text>
-        <Text style={styles.resultCategory}>{item.category}</Text>
+        <Text style={styles.resultPrice}>₺{item.price?.toLocaleString()}</Text>
+        <Text style={styles.resultCategory}>
+          {item.category?.name || 'Kategori Yok'}
+        </Text>
+        <Text style={styles.resultSeller}>
+          {item.seller || 'Satıcı Yok'}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -64,20 +121,29 @@ export default function SearchScreen() {
       {searchText.length > 0 ? (
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsHeader}>
-            {searchResults.length} sonuç bulundu
+            {isSearching ? 'Aranıyor...' : `${searchResults.length} sonuç bulundu`}
           </Text>
-          <FlatList
-            data={searchResults}
-            renderItem={SearchResultItem}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-          />
+          {isLoading ? (
+            <ActivityIndicator size="large" color="#B8860B" style={styles.loader} />
+          ) : isSearching ? (
+            <ActivityIndicator size="small" color="#B8860B" style={styles.loader} />
+          ) : (
+            <FlatList
+              data={searchResults}
+              renderItem={SearchResultItem}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
         </View>
       ) : (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>
             Aradığınız ürünü yazın
           </Text>
+          {isLoading && (
+            <ActivityIndicator size="large" color="#B8860B" style={styles.loader} />
+          )}
         </View>
       )}
     </SafeAreaView>
@@ -163,6 +229,12 @@ const styles = StyleSheet.create({
   resultCategory: {
     fontSize: 12,
     color: '#666',
+    marginBottom: 2,
+  },
+  resultSeller: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
   },
   emptyState: {
     flex: 1,
@@ -172,5 +244,8 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     color: '#666',
+  },
+  loader: {
+    marginTop: 20,
   },
 });

@@ -30,23 +30,16 @@ export default function LoginScreen() {
       const success = await login(email, password);
       
       if (success) {
-        Alert.alert(
-          'Başarılı! 🎉', 
-          'Giriş işlemi başarılı!',
-          [
-            {
-              text: 'Tamam',
-              onPress: () => router.back()
-            }
-          ]
-        );
+        // Başarılı login sonrası anasayfaya yönlendir
+        router.replace('/(tabs)'); // Geri butonunu kaldırmak için replace kullan
       } else {
         Alert.alert(
-          'Hata', 
-          'Email veya şifre hatalı. Şifreniz en az 4 karakter olmalıdır.'
+          'Giriş Hatası', 
+          'Email veya şifre hatalı. Lütfen bilgilerinizi kontrol edin.'
         );
       }
     } catch (error) {
+      console.error('Login catch error:', error);
       Alert.alert('Hata', 'Bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
       setIsLoading(false);

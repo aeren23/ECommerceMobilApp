@@ -62,7 +62,7 @@ export default function CartScreen() {
 
     Alert.alert(
       'Ödeme Onayı',
-      `Merhaba ${user?.name}!\n\nToplam ${getTotalItems()} ürün için ₺${getTotalPrice().toLocaleString()} ödeme yapılacak.`,
+      `Merhaba ${user?.fullName}!\n\nToplam ${getTotalItems()} ürün için ₺${getTotalPrice().toLocaleString()} ödeme yapılacak.`,
       [
         { text: 'İptal', style: 'cancel' },
         { text: 'Ödeme Yap', onPress: () => {
