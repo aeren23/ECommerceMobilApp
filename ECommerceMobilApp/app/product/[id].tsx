@@ -106,37 +106,24 @@ export default function ProductDetailScreen() {
     }
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
+    if (!product) return;
+    
     if (product.stock === 0) {
       Alert.alert('Uyarı', 'Bu ürün stokta bulunmamaktadır.');
       return;
     }
 
-    if (currentCartQuantity + quantity > product.stock) {
+    if (quantity > product.stock) {
       Alert.alert(
         'Stok Uyarısı',
-        `Bu üründen en fazla ${product.stock} adet satın alabilirsiniz. Sepetinizde zaten ${currentCartQuantity} adet var.`
+        `Bu üründen en fazla ${product.stock} adet satın alabilirsiniz.`
       );
       return;
     }
 
-    addToCartContext({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.image,
-      category: getCategoryName(product.categoryId),
-      maxStock: product.stock,
-    }, quantity);
-
-    Alert.alert(
-      'Sepete Eklendi! 🛒',
-      `${product.name} - ${quantity} adet sepetinize eklendi.`,
-      [
-        { text: 'Tamam', style: 'default' },
-        { text: 'Sepete Git', onPress: () => router.push('/(tabs)/cart') }
-      ]
-    );
+    // Backend API'ye sepete ekleme isteği
+    await addToCartContext(product.id, quantity);
 
     // Miktar seçiciyi sıfırla
     setQuantity(1);

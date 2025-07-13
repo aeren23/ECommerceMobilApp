@@ -13,10 +13,10 @@ import { useUser } from '../context/UserContext';
 import { router } from 'expo-router';
 
 export default function SellerPanelScreen() {
-  const { user, isSeller } = useUser();
+  const { user, hasRole } = useUser();
 
   // Eğer satıcı değilse erişim engelle
-  if (!isSeller) {
+  if (!hasRole('seller')) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -30,7 +30,7 @@ export default function SellerPanelScreen() {
           <Ionicons name="warning-outline" size={80} color="#FF3B30" />
           <Text style={styles.accessDeniedTitle}>Erişim Engellendi</Text>
           <Text style={styles.accessDeniedText}>
-            Bu bölüme sadece satıcılar erişebilir.
+            Bu bölüme sadece satıcı yetkisine sahip kullanıcılar erişebilir.
           </Text>
         </View>
       </SafeAreaView>

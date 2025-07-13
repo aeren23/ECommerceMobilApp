@@ -12,6 +12,7 @@ export interface User {
   address?: string;
   createdAt: string;
   role?: string;  // Kullanıcı rolü: customer, seller, admin
+  roles?: string[];  // Kullanıcının sahip olduğu tüm roller
   orders?: any[];  // API'de orders array'i geliyor
 }
 
@@ -41,6 +42,9 @@ interface UserContextType {
   isSeller: boolean;
   isAdmin: boolean;
   getUserRole: () => string | null;
+  getUserRoles: () => string[];
+  getHighestRole: () => string;
+  hasRole: (role: string) => boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -117,19 +121,43 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      // Token'dan rol bilgisini çıkar ve user verisine ekle
+      console.log('Starting saveUserData with token decode...');
+      
+      // Token'ı kaydet
+      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+      
+      // Debug: Manuel token decode
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('🔍 DEBUG: Direct token payload:', payload);
+        const directRoleField = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+        console.log('🔍 DEBUG: Direct role field:', directRoleField);
+      } catch (debugError) {
+        console.error('🔍 DEBUG: Manual token decode failed:', debugError);
+      }
+      
+      // Token'dan rol bilgilerini çıkar ve user verisine ekle
       const role = await getRoleFromToken();
-      const userWithRole = { ...userData, role: role || userData.role || 'customer' };
+      const roles = await getRolesFromToken();
+      
+      console.log('🔍 Role from token:', role);
+      console.log('🔍 Roles from token:', roles);
+      
+      const userWithRole = { 
+        ...userData, 
+        role: role || userData.role || 'Customer',
+        roles: roles || userData.roles || ['Customer']
+      };
       
       console.log('Saving user data:', {
         id: userWithRole.id,
         fullName: userWithRole.fullName,
         email: userWithRole.email,
-        role: userWithRole.role
+        role: userWithRole.role,
+        roles: userWithRole.roles
       });
       
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userWithRole));
-      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
       setUser(userWithRole);
       
       console.log('User data saved successfully');
@@ -137,8 +165,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('❌ Kullanıcı verileri kaydedilemedi:', error);
     }
   };
-
-  // API çağrısı için genel fonksiyon kaldırıldı - artık ApiService kullanıyoruz
 
   // Giriş yap
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -298,14 +324,64 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // JWT token'ı decode et
       const payload = JSON.parse(atob(token.split('.')[1]));
       
-      // Rol bilgisi farklı field'larda olabilir
-      const role = payload.role || payload.Role || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+      console.log('🔍 Token payload:', payload);
       
-      console.log('Token payload role:', role);
-      return role || 'customer'; // Default role customer
+      // Rol bilgisi farklı field'larda olabilir 
+      const roleField = payload.role || payload.Role || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+      
+      console.log('🔍 Role field from token:', roleField);
+      
+      // Eğer roles array'i varsa en yetkili rolü döndür
+      if (Array.isArray(roleField)) {
+        const roles = roleField.map(r => r.toLowerCase());
+        console.log('🔍 Roles array (lowercase):', roles);
+        
+        // Yetki sırası: Admin > Seller > Customer
+        if (roles.includes('admin')) return 'Admin';
+        if (roles.includes('seller')) return 'Seller';
+        if (roles.includes('customer')) return 'Customer';
+        return roleField[0] || 'Customer';
+      }
+      
+      // Tek rol ise direkt döndür 
+      const singleRole = roleField?.toLowerCase();
+      if (singleRole === 'admin') return 'Admin';
+      if (singleRole === 'seller') return 'Seller';
+      if (singleRole === 'customer') return 'Customer';
+      
+      console.log('Token payload role:', roleField);
+      return roleField || 'Customer'; // Default role customer
     } catch (error) {
       console.error('❌ Token decode error:', error);
       return null;
+    }
+  };
+
+  // Token'dan tüm rolleri çıkar
+  const getRolesFromToken = async (): Promise<string[]> => {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!token) return ['Customer'];
+
+      // JWT token'ı decode et
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      
+      // Rol bilgisi farklı field'larda olabilir
+      const roleField = payload.role || payload.Role || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+      
+      console.log('🔍 All roles from token:', roleField);
+      
+      // Eğer array ise direkt döndür (case'i koru)
+      if (Array.isArray(roleField)) {
+        return roleField; // Backend'den gelen case'i koru: ["Customer", "Seller"]
+      } else if (roleField) {
+        return [roleField]; // Tek rol ise array yap
+      }
+      
+      return ['Customer']; // Default role
+    } catch (error) {
+      console.error('❌ Token roles decode error:', error);
+      return ['Customer'];
     }
   };
 
@@ -314,9 +390,41 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user?.role || null;
   };
 
-  const isCustomer = user?.role === 'customer' || user?.role === 'Customer';
-  const isSeller = user?.role === 'seller' || user?.role === 'Seller';
-  const isAdmin = user?.role === 'admin' || user?.role === 'Admin';
+  // Tüm rolleri döndür
+  const getUserRoles = (): string[] => {
+    return user?.roles || [user?.role || 'Customer'];
+  };
+
+  // En yetkili rolü döndür (Admin > Seller > Customer)
+  const getHighestRole = (): string => {
+    const roles = getUserRoles().map(r => r.toLowerCase());
+    console.log('🎯 Getting highest role from:', roles);
+    
+    if (roles.includes('admin')) return 'Admin';
+    if (roles.includes('seller')) return 'Seller';
+    if (roles.includes('customer')) return 'Customer';
+    return 'Customer';
+  };
+
+  // Belirli bir role sahip mi kontrol et
+  const hasRole = (role: string): boolean => {
+    const roles = getUserRoles().map(r => r.toLowerCase());
+    const targetRole = role.toLowerCase();
+    const hasRoleResult = roles.includes(targetRole);
+    
+    console.log(`🔍 hasRole('${role}'):`, {
+      userRoles: roles,
+      targetRole,
+      result: hasRoleResult
+    });
+    
+    return hasRoleResult;
+  };
+
+  // Temel rol kontrolleri - hem tek hem çoklu rol için
+  const isCustomer = hasRole('customer');
+  const isSeller = hasRole('seller');
+  const isAdmin = hasRole('admin');
 
   const contextValue: UserContextType = {
     user,
@@ -330,6 +438,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isSeller,
     isAdmin,
     getUserRole,
+    getUserRoles,
+    getHighestRole,
+    hasRole,
   };
 
   return (

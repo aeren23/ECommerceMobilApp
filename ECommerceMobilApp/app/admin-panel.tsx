@@ -13,10 +13,10 @@ import { useUser } from '../context/UserContext';
 import { router } from 'expo-router';
 
 export default function AdminPanelScreen() {
-  const { user, isAdmin } = useUser();
+  const { user, hasRole } = useUser();
 
   // Eğer admin değilse erişim engelle
-  if (!isAdmin) {
+  if (!hasRole('admin')) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -30,7 +30,7 @@ export default function AdminPanelScreen() {
           <Ionicons name="warning-outline" size={80} color="#FF3B30" />
           <Text style={styles.accessDeniedTitle}>Erişim Engellendi</Text>
           <Text style={styles.accessDeniedText}>
-            Bu bölüme sadece adminler erişebilir.
+            Bu bölüme sadece admin yetkisine sahip kullanıcılar erişebilir.
           </Text>
         </View>
       </SafeAreaView>

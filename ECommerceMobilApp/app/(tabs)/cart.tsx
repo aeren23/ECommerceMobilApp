@@ -14,22 +14,18 @@ import { useCart } from '../../context/CartContext';
 import { useUser } from '../../context/UserContext';
 
 export default function CartScreen() {
-  const { cartItems, removeFromCart, updateQuantity, getTotalPrice, getTotalItems, clearCart } = useCart();
+  const { cart, cartItems, removeFromCart, getTotalPrice, getTotalItems, clearCart, createOrder, isLoading, refreshCart } = useCart();
   const { isLoggedIn, user } = useUser();
 
-  const handleQuantityChange = (id: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      Alert.alert(
-        'Ürünü Kaldır',
-        'Bu ürünü sepetten kaldırmak istediğinize emin misiniz?',
-        [
-          { text: 'İptal', style: 'cancel' },
-          { text: 'Kaldır', onPress: () => removeFromCart(id), style: 'destructive' }
-        ]
-      );
-    } else {
-      updateQuantity(id, newQuantity);
-    }
+  const handleRemoveItem = (productId: string) => {
+    Alert.alert(
+      'Ürünü Kaldır',
+      'Bu ürünü sepetten kaldırmak istediğinize emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { text: 'Kaldır', onPress: () => removeFromCart(productId), style: 'destructive' }
+      ]
+    );
   };
 
   const handleClearCart = () => {
@@ -60,52 +56,59 @@ export default function CartScreen() {
       return;
     }
 
+    // Sepet boş kontrolü
+    if (!cart || !cartItems || cartItems.length === 0) {
+      Alert.alert('Sepet Boş', 'Sipariş vermek için sepetinizde ürün olmalı.');
+      return;
+    }
+
+    // Sipariş onayı
     Alert.alert(
-      'Ödeme Onayı',
-      `Merhaba ${user?.fullName}!\n\nToplam ${getTotalItems()} ürün için ₺${getTotalPrice().toLocaleString()} ödeme yapılacak.`,
+      'Sipariş Onayı 🛍️',
+      `Merhaba ${user?.fullName}!\n\n📦 ${getTotalItems()} ürün\n💰 Toplam: ₺${getTotalPrice().toLocaleString()}\n\nSiparişinizi onaylıyor musunuz?`,
       [
         { text: 'İptal', style: 'cancel' },
-        { text: 'Ödeme Yap', onPress: () => {
-          Alert.alert(
-            'Başarılı! 🎉', 
-            'Ödemeniz başarıyla tamamlandı. Siparişiniz hazırlanacak.',
-            [
-              { text: 'Tamam', onPress: () => clearCart() }
-            ]
-          );
-        }}
+        { 
+          text: 'Siparişi Onayla', 
+          onPress: async () => {
+            try {
+              await createOrder();
+            } catch (error) {
+              console.error('Order creation error:', error);
+              Alert.alert('Hata', 'Sipariş oluşturulurken bir hata oluştu');
+            }
+          }
+        }
       ]
     );
   };
 
   const CartItem = ({ item }: { item: any }) => (
     <TouchableOpacity
-      onPress={() => router.push(`/product/${item.id}`)}
+      onPress={() => router.push(`/product/${item.productId}`)}
       activeOpacity={0.8}
     >
       <View style={styles.cartItem}>
-      <Image source={{ uri: item.image }} style={styles.productImage} />
-      <View style={styles.productInfo}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productCategory}>{item.category}</Text>
-        <Text style={styles.productPrice}>₺{item.price.toLocaleString()}</Text>
+        <Image 
+          source={{ uri: item.product?.image || 'https://via.placeholder.com/100' }} 
+          style={styles.productImage} 
+        />
+        <View style={styles.productInfo}>
+          <Text style={styles.productName}>{item.product?.name || 'Ürün'}</Text>
+          <Text style={styles.productCategory}>{item.product?.category?.name || 'Kategori'}</Text>
+          <Text style={styles.productPrice}>₺{item.price.toLocaleString()}</Text>
+          <Text style={styles.productQuantity}>Adet: {item.quantity}</Text>
+          <Text style={styles.productTotal}>Toplam: ₺{(item.price * item.quantity).toLocaleString()}</Text>
+        </View>
+        <View style={styles.actionContainer}>
+          <TouchableOpacity
+            style={styles.removeButton}
+            onPress={() => handleRemoveItem(item.productId)}
+          >
+            <Text style={styles.removeButtonText}>Kaldır</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.quantityContainer}>
-        <TouchableOpacity
-          style={styles.quantityButton}
-          onPress={() => handleQuantityChange(item.id, item.quantity - 1)}
-        >
-          <Text style={styles.quantityButtonText}>−</Text>
-        </TouchableOpacity>
-        <Text style={styles.quantityText}>{item.quantity}</Text>
-        <TouchableOpacity
-          style={styles.quantityButton}
-          onPress={() => handleQuantityChange(item.id, item.quantity + 1)}
-        >
-          <Text style={styles.quantityButtonText}>+</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
     </TouchableOpacity>
   );
 
@@ -324,6 +327,32 @@ const styles = StyleSheet.create({
   checkoutButtonText: {
     color: 'white',
     fontSize: 18,
+    fontWeight: 'bold',
+  },
+  productQuantity: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  productTotal: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#B8860B',
+    marginTop: 4,
+  },
+  actionContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeButton: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  removeButtonText: {
+    color: 'white',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 });

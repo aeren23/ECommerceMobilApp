@@ -23,9 +23,48 @@ export interface UpdateCategoryDto {
   name: string;
 }
 
+// Cart DTO'ları - Backend'den gelen format
+export interface CartItemDto {
+  id: string;
+  cartId: string;
+  productId: string;
+  quantity: number;
+  price: number;
+  product?: {
+    id: string;
+    name: string;
+    image: string;
+    category?: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export interface CartDto {
+  id: string;
+  userId: string;
+  totalPrice: number;
+  items: CartItemDto[];
+}
+
+export interface AddCartItemRequest {
+  productId: string;
+  quantity: number;
+}
+
+export interface CreateCategoryDto {
+  name: string;
+}
+
+export interface UpdateCategoryDto {
+  id: string;
+  name: string;
+}
+
 // API Base URL - Basitleştirilmiş
 // Development modunda hep manuel IP kullan
-const DEVICE_IP = '192.168.78.84'; // Bilgisayarın Wi-Fi IP'si
+const DEVICE_IP = '10.216.64.84'; // Bilgisayarın Wi-Fi IP'si
 const API_PORT = '5222';
 
 const API_BASE_URL = __DEV__ 
@@ -33,8 +72,10 @@ const API_BASE_URL = __DEV__
   : 'https://your-production-api.com/api'; // Production: Gerçek domain
 
 const TOKEN_STORAGE_KEY = '@auth_token';
+// Cache key'leri
 const CATEGORIES_CACHE_KEY = '@categories_cache';
 const PRODUCTS_CACHE_KEY = '@products_cache';
+const CART_CACHE_KEY = '@cart_cache';
 const CACHE_EXPIRY_KEY = '@cache_expiry';
 
 // Cache süresi: 5 dakika (300000 ms)
@@ -77,17 +118,29 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
 
     let responseData;
     try {
-      responseData = JSON.parse(responseText);
+      // Boş response kontrolü
+      if (!responseText || responseText.trim() === '') {
+        console.log('Empty response received, treating as success');
+        responseData = { success: true, value: true };
+      } else {
+        responseData = JSON.parse(responseText);
+      }
     } catch (parseError) {
       console.error('❌ JSON Parse Error:', parseError);
       console.log('Response was not valid JSON:', responseText);
       
-      // JSON parse edilemezse error döndür
-      return {
-        value: null as T,
-        success: false,
-        errorMessage: `Invalid JSON response: ${responseText.substring(0, 200)}...`
-      };
+      // Boş response kontrolü
+      if (!responseText || responseText.trim() === '') {
+        console.log('Empty response but status OK, treating as success');
+        responseData = { success: true, value: true };
+      } else {
+        // JSON parse edilemezse error döndür
+        return {
+          value: null as T,
+          success: false,
+          errorMessage: `Invalid JSON response: ${responseText.substring(0, 200)}...`
+        };
+      }
     }
     
     console.log('Response Data:', responseData);
@@ -484,60 +537,237 @@ export const ProductAPI = {
   }
 };
 
-// Cart API'leri - ServiceResponse formatını kullanır
+// Cart API'leri - Backend'e uygun cache destekli
 export const CartAPI = {
-  getCart: async (): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/cart');
+  // Sepeti getir (cache destekli)
+  getCart: async (): Promise<ServiceResponse<CartDto>> => {
+    try {
+      // Önce cache'i kontrol et
+      const cacheKey = CART_CACHE_KEY;
+      const expiryKey = `${CACHE_EXPIRY_KEY}_cart`;
+      
+      const cachedData = await AsyncStorage.getItem(cacheKey);
+      const cachedExpiry = await AsyncStorage.getItem(expiryKey);
+      
+      if (cachedData && cachedExpiry) {
+        const expiryTime = parseInt(cachedExpiry);
+        if (Date.now() < expiryTime) {
+          console.log('📦 Cart cache hit');
+          return {
+            value: JSON.parse(cachedData),
+            success: true
+          };
+        }
+      }
+      
+      console.log('🌐 Cart cache miss, fetching from API');
+      const response = await apiCall<CartDto>('/Cart');
+      
+      // Başarılı response'u cache'le
+      if (response.success && response.value) {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(response.value));
+        await AsyncStorage.setItem(expiryKey, (Date.now() + CACHE_DURATION).toString());
+        console.log('💾 Cart cached successfully');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error in CartAPI.getCart:', error);
+      return {
+        value: null as CartDto,
+        success: false,
+        errorMessage: error.message || 'Failed to get cart'
+      };
+    }
   },
 
-  addToCart: async (productId: string, quantity: number): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/cart/add-item', 'POST', { productId, quantity });
+  // Sepete ürün ekle
+  addToCart: async (productId: string, quantity: number): Promise<ServiceResponse<boolean>> => {
+    try {
+      console.log('🛒 CartAPI.addToCart called with:', { productId, quantity });
+      
+      const requestBody = { 
+        productId, 
+        quantity 
+      };
+      console.log('📦 Request body:', requestBody);
+      
+      const response = await apiCall<boolean>('/Cart/add-item', 'POST', requestBody);
+      console.log('📨 API Response:', response);
+      
+      // Başarılı işlemde cache'i temizle
+      if (response.success) {
+        await AsyncStorage.removeItem(CART_CACHE_KEY);
+        await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
+        console.log('🗑️ Cart cache cleared after add');
+      } else {
+        console.error('❌ API returned error:', response.errorMessage);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in CartAPI.addToCart:', error);
+      return {
+        value: false,
+        success: false,
+        errorMessage: error.message || 'Failed to add item to cart'
+      };
+    }
   },
 
-  updateCartItem: async (itemId: string, quantity: number): Promise<ServiceResponse<any>> => {
-    return apiCall<any>(`/cart/items/${itemId}`, 'PUT', { quantity });
+  // Sepetten ürün çıkar
+  removeFromCart: async (productId: string): Promise<ServiceResponse<boolean>> => {
+    try {
+      const response = await apiCall<boolean>(`/Cart/remove-item/${productId}`, 'DELETE');
+      
+      // Başarılı işlemde cache'i temizle
+      if (response.success) {
+        await AsyncStorage.removeItem(CART_CACHE_KEY);
+        await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
+        console.log('🗑️ Cart cache cleared after remove');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error in CartAPI.removeFromCart:', error);
+      return {
+        value: false,
+        success: false,
+        errorMessage: error.message || 'Failed to remove item from cart'
+      };
+    }
   },
 
-  removeFromCart: async (productId: string): Promise<ServiceResponse<any>> => {
-    return apiCall<any>(`/cart/remove-item/${productId}`, 'DELETE');
+  // Sepeti temizle
+  clearCart: async (): Promise<ServiceResponse<boolean>> => {
+    try {
+      const response = await apiCall<boolean>('/Cart/clear', 'DELETE');
+      
+      // Başarılı işlemde cache'i temizle
+      if (response.success) {
+        await AsyncStorage.removeItem(CART_CACHE_KEY);
+        await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
+        console.log('🗑️ Cart cache cleared after clear');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Error in CartAPI.clearCart:', error);
+      return {
+        value: false,
+        success: false,
+        errorMessage: error.message || 'Failed to clear cart'
+      };
+    }
   },
 
-  clearCart: async (): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/cart/clear', 'DELETE');
+  // Cache'i manuel temizle
+  clearCache: async (): Promise<void> => {
+    await AsyncStorage.removeItem(CART_CACHE_KEY);
+    await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
+    console.log('🗑️ Cart cache manually cleared');
   }
 };
 
 // Order API'leri - ServiceResponse formatını kullanır
 export const OrderAPI = {
-  createOrder: async (orderData: any): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/orders', 'POST', orderData);
+  // Sipariş oluştur
+  createOrder: async (orderData: {
+    userId: string;
+    items: {
+      productId: string;
+      quantity: number;
+    }[];
+  }): Promise<ServiceResponse<string>> => {
+    try {
+      console.log('🛍️ OrderAPI.createOrder called with:', orderData);
+      
+      const response = await apiCall<string>('/Order', 'POST', orderData);
+      console.log('📨 Order API Response:', response);
+      
+      // Başarılı işlemde sadece cache'i temizle (backend'de sepet otomatik temizlenir)
+      if (response.success) {
+        await AsyncStorage.removeItem(CART_CACHE_KEY);
+        await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
+        console.log('🗑️ Cart cache cleared after order creation');
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in OrderAPI.createOrder:', error);
+      return {
+        value: '',
+        success: false,
+        errorMessage: error.message || 'Failed to create order'
+      };
+    }
   },
 
+  // Kullanıcının siparişlerini getir
   getOrders: async (): Promise<ServiceResponse<any[]>> => {
-    return apiCall<any[]>('/orders');
+    try {
+      console.log('📋 OrderAPI.getOrders called');
+      const response = await apiCall<any[]>('/Order');
+      console.log('📨 Orders API Response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error in OrderAPI.getOrders:', error);
+      return {
+        value: [],
+        success: false,
+        errorMessage: error.message || 'Failed to get orders'
+      };
+    }
   },
 
-  getOrderById: async (id: string): Promise<ServiceResponse<any>> => {
-    return apiCall<any>(`/orders/${id}`);
+  // ID ile sipariş getir
+  getOrderById: async (orderId: string): Promise<ServiceResponse<any>> => {
+    try {
+      console.log('🔍 OrderAPI.getOrderById called with:', orderId);
+      const response = await apiCall<any>(`/Order/${orderId}`);
+      console.log('📨 Order details API Response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error in OrderAPI.getOrderById:', error);
+      return {
+        value: null,
+        success: false,
+        errorMessage: error.message || 'Failed to get order details'
+      };
+    }
   },
 
-  cancelOrder: async (id: string): Promise<ServiceResponse<any>> => {
-    return apiCall<any>(`/orders/${id}/cancel`, 'POST');
-  }
-};
-
-// User API'leri - ServiceResponse formatını kullanır
-export const UserAPI = {
-  getProfile: async (): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/users/profile');
+  // Sipariş iptal et
+  cancelOrder: async (orderId: string): Promise<ServiceResponse<boolean>> => {
+    try {
+      console.log('❌ OrderAPI.cancelOrder called with:', orderId);
+      const response = await apiCall<boolean>(`/Order/${orderId}`, 'DELETE');
+      console.log('📨 Cancel order API Response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Error in OrderAPI.cancelOrder:', error);
+      return {
+        value: false,
+        success: false,
+        errorMessage: error.message || 'Failed to cancel order'
+      };
+    }
   },
 
-  updateProfile: async (userData: any): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/users/profile', 'PUT', userData);
-  },
-
-  changePassword: async (currentPassword: string, newPassword: string): Promise<ServiceResponse<any>> => {
-    return apiCall<any>('/users/change-password', 'POST', { currentPassword, newPassword });
+  // Basitleştirilmiş fonksiyonlar
+  createOrderSimple: async (orderData: {
+    userId: string;
+    items: {
+      productId: string;
+      quantity: number;
+    }[];
+  }): Promise<{ success: boolean; orderId?: string; message?: string }> => {
+    const response = await OrderAPI.createOrder(orderData);
+    return {
+      success: response.success,
+      orderId: response.success ? response.value : undefined,
+      message: response.success ? undefined : response.errorMessage
+    };
   }
 };
 
@@ -573,6 +803,62 @@ export const TokenUtils = {
     } catch (error) {
       return false;
     }
+  }
+};
+
+// Default export
+// User API'leri - ServiceResponse formatını kullanır
+export const UserAPI = {
+  // Profil bilgilerini getir
+  getProfile: async (): Promise<ServiceResponse<any>> => {
+    return apiCall<any>('/UserProfile');
+  },
+
+  // Profil bilgilerini güncelle
+  updateProfile: async (userData: {
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+    address?: string;
+  }): Promise<ServiceResponse<any>> => {
+    return apiCall<any>('/UserProfile', 'PUT', userData);
+  },
+
+  // Kullanıcıya rol ekle (seller rolüne yükseltme için)
+  addRole: async (roleName: string): Promise<ServiceResponse<any>> => {
+    return apiCall<any>('/UserProfile/add-role', 'POST', roleName);
+  },
+
+  // Profili sil
+  deleteProfile: async (): Promise<ServiceResponse<any>> => {
+    return apiCall<any>('/UserProfile', 'DELETE');
+  },
+
+  // Basitleştirilmiş fonksiyonlar
+  getProfileSimple: async (): Promise<any | null> => {
+    const response = await UserAPI.getProfile();
+    return response.success ? response.value : null;
+  },
+
+  updateProfileSimple: async (userData: {
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+    address?: string;
+  }): Promise<{ success: boolean; message?: string }> => {
+    const response = await UserAPI.updateProfile(userData);
+    return {
+      success: response.success,
+      message: response.success ? undefined : response.errorMessage
+    };
+  },
+
+  addRoleSimple: async (roleName: string): Promise<{ success: boolean; message?: string }> => {
+    const response = await UserAPI.addRole(roleName);
+    return {
+      success: response.success,
+      message: response.success ? undefined : response.errorMessage
+    };
   }
 };
 

@@ -159,29 +159,23 @@ export default function HomeScreen() {
   };
 
   // Hızlı sepete ekleme fonksiyonu
-  const handleQuickAddToCart = (product: Product) => {
+  const handleQuickAddToCart = async (product: Product) => {
+    console.log('🛒 handleQuickAddToCart called for product:', product.id);
+    
     if (product.stock === 0) {
       Alert.alert('Uyarı', 'Bu ürün stokta bulunmamaktadır.');
       return;
     }
 
-    addToCart({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.image,
-      category: getCategoryName(product.categoryId),
-      maxStock: product.stock,
-    });
-
-    Alert.alert(
-      'Sepete Eklendi! 🛒',
-      `${product.name} sepetinize eklendi.`,
-      [
-        { text: 'Tamam', style: 'default' },
-        { text: 'Sepete Git', onPress: () => router.push('/(tabs)/cart') }
-      ]
-    );
+    try {
+      console.log('🛒 About to call addToCart...');
+      // Backend API'ye sepete ekleme isteği
+      await addToCart(product.id, 1);
+      console.log('🛒 addToCart completed');
+    } catch (error) {
+      console.error('❌ Error in handleQuickAddToCart:', error);
+      Alert.alert('Hata', 'Ürün sepete eklenirken bir hata oluştu');
+    }
   };
 
   // İndirimli ürünleri filtrele - useMemo ile optimize et

@@ -23,6 +23,20 @@ export default function RootLayout() {
               headerTintColor: 'white'
             }} 
           />
+          <Stack.Screen 
+            name="orders" 
+            options={{headerShown: false }}
+          />
+          <Stack.Screen 
+            name="settings" 
+            options={{
+              headerShown: false,
+              contentStyle:{paddingBottom: 50,
+                paddingTop:30,
+                backgroundColor: '#f8f9fa'
+              }
+             }}
+          />
         </Stack>
         <StatusBar style="auto" />
       </CartProvider>

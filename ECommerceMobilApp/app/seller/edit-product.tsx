@@ -243,7 +243,7 @@ export default function EditProductScreen() {
               </View>
 
               <View style={[styles.inputContainer, styles.halfWidth]}>
-                <Text style={styles.label}>Eski Fiyat (₺)</Text>
+                <Text style={styles.label}>Gerçek Fiyat (₺)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0"

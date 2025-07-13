@@ -14,13 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
-  const { user, isLoggedIn, logout, isCustomer, isSeller, isAdmin } = useUser();
+  const { user, isLoggedIn, logout, isCustomer, isSeller, isAdmin, getHighestRole, getUserRoles, hasRole } = useUser();
 
   const getRoleName = () => {
-    if (isAdmin) return 'Admin';
-    if (isSeller) return 'Satıcı';
-    if (isCustomer) return 'Müşteri';
-    return 'Kullanıcı';
+    if (!isLoggedIn) return 'Misafir';
+    
+    // En yetkili rolü göster
+    const highestRole = getHighestRole();
+    return highestRole;
   };
 
   const getRoleColor = () => {
@@ -28,6 +29,24 @@ export default function ProfileScreen() {
     if (isSeller) return '#B8860B';
     if (isCustomer) return '#34C759';
     return '#8E8E93';
+  };
+
+  const getAllRolesDisplay = () => {
+    if (!isLoggedIn) return '';
+    
+    const roles = getUserRoles();
+    if (roles.length <= 1) return '';
+    
+    const roleNames = roles.map(role => {
+      switch(role.toLowerCase()) {
+        case 'admin': return 'Admin';
+        case 'seller': return 'Satıcı';
+        case 'customer': return 'Müşteri';
+        default: return role;
+      }
+    });
+    
+    return `Diğer Roller: ${roleNames.join(', ')}`;
   };
 
   const handleLogin = () => {
@@ -78,6 +97,9 @@ export default function ProfileScreen() {
                 <View style={[styles.rolebadge, { backgroundColor: getRoleColor() }]}>
                   <Text style={styles.roleBadgeText}>{getRoleName()}</Text>
                 </View>
+                {getAllRolesDisplay() && (
+                  <Text style={styles.allRolesText}>{getAllRolesDisplay()}</Text>
+                )}
                 <Text style={styles.userInfo}>📧 {user?.email}</Text>
                 <Text style={styles.userInfo}>📞 {user?.phoneNumber}</Text>
                 {user?.address && (
@@ -113,11 +135,11 @@ export default function ProfileScreen() {
           )}
 
           {/* Rol-based Menu Items */}
-          {isLoggedIn && (isSeller || isAdmin) && (
+          {isLoggedIn && (hasRole('seller') || hasRole('admin')) && (
             <View style={styles.roleMenuSection}>
               <Text style={styles.sectionTitle}>Yönetim Paneli</Text>
               
-              {isSeller && (
+              {hasRole('seller') && (
                 <TouchableOpacity 
                   style={styles.roleMenuItem}
                   onPress={() => router.push('/seller-panel')}
@@ -133,7 +155,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               )}
               
-              {isAdmin && (
+              {hasRole('admin') && (
                 <TouchableOpacity 
                   style={styles.roleMenuItem}
                   onPress={() => router.push('/admin-panel')}
@@ -155,14 +177,16 @@ export default function ProfileScreen() {
           <View style={styles.menuSection}>
             <Text style={styles.sectionTitle}>Menü</Text>
             
-            <TouchableOpacity 
-              style={styles.menuItem}
-              onPress={() => showFeature('Siparişlerim')}
-            >
-              <Ionicons name="receipt-outline" size={20} color="#666" />
-              <Text style={styles.menuItemText}>Siparişlerim</Text>
-              <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
-            </TouchableOpacity>
+            {isLoggedIn && (
+              <TouchableOpacity 
+                style={styles.menuItem}
+                onPress={() => router.push('/orders')}
+              >
+                <Ionicons name="receipt-outline" size={20} color="#666" />
+                <Text style={styles.menuItemText}>Siparişlerim</Text>
+                <Ionicons name="chevron-forward" size={16} color="#8E8E93" />
+              </TouchableOpacity>
+            )}
             
             <TouchableOpacity 
               style={styles.menuItem}
@@ -175,7 +199,13 @@ export default function ProfileScreen() {
             
             <TouchableOpacity 
               style={styles.menuItem}
-              onPress={() => showFeature('Ayarlar')}
+              onPress={() => {
+                if (!isLoggedIn) {
+                  Alert.alert('Uyarı', 'Ayarlara erişmek için giriş yapmanız gerekiyor.');
+                  return;
+                }
+                router.push('/settings');
+              }}
             >
               <Ionicons name="settings-outline" size={20} color="#666" />
               <Text style={styles.menuItemText}>Ayarlar</Text>
@@ -275,7 +305,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  allRolesText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
     textAlign: 'center',
+    fontStyle: 'italic',
   },
   loginPrompt: {
     color: '#666',
