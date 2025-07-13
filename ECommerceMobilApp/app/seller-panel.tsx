@@ -44,7 +44,7 @@ export default function SellerPanelScreen() {
       subtitle: 'Ürünlerinizi görüntüleyin ve yönetin',
       icon: 'cube-outline',
       color: '#007AFF',
-      onPress: () => Alert.alert('Yakında', 'Ürünlerim sayfası yakında aktif olacak!')
+      onPress: () => router.push('/seller/my-products')
     },
     {
       id: 'add-product',

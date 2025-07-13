@@ -10,6 +10,11 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
+          <Stack.Screen name="seller" options={{ headerShown: false }} />
+          <Stack.Screen name="seller-panel" options={{ 
+            headerShown: false,
+            contentStyle: { paddingBottom: 50 }
+          }} />
           <Stack.Screen 
             name="product/[id]" 
             options={{ 

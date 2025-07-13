@@ -222,9 +222,9 @@ export const CategoryAPI = {
         PRODUCTS_CACHE_KEY,
         CACHE_EXPIRY_KEY
       ]);
-      console.log('✅ Cache cleared successfully');
+      console.log('Cache cleared successfully');
     } catch (error) {
-      console.error('❌ Cache clear failed:', error);
+      console.error('Cache clear failed:', error);
     }
   },
 
@@ -236,7 +236,7 @@ export const CategoryAPI = {
       if (isCacheValid) {
         const cachedCategories = await AsyncStorage.getItem(CATEGORIES_CACHE_KEY);
         if (cachedCategories) {
-          console.log('✅ Loading categories from cache');
+          console.log('Loading categories from cache');
           return {
             success: true,
             value: JSON.parse(cachedCategories),
@@ -246,14 +246,14 @@ export const CategoryAPI = {
       }
 
       // Cache yoksa veya geçersizse API'den çek
-      console.log('📡 Fetching categories from API');
+      console.log('Fetching categories from API');
       const response = await apiCall<CategoryDto[]>('/Category');
       
       // Başarılı response'u cache'e kaydet
       if (response.success && response.value) {
         await AsyncStorage.setItem(CATEGORIES_CACHE_KEY, JSON.stringify(response.value));
         await AsyncStorage.setItem(CACHE_EXPIRY_KEY, (Date.now() + CACHE_DURATION).toString());
-        console.log('✅ Categories cached successfully');
+        console.log('Categories cached successfully');
       }
       
       return response;
@@ -279,7 +279,7 @@ export const CategoryAPI = {
     // Başarılı create işleminden sonra cache'i temizle
     if (response.success) {
       await CategoryAPI.clearCache();
-      console.log('✅ Cache cleared after category creation');
+      console.log('Cache cleared after category creation');
     }
     
     return response;
@@ -332,19 +332,19 @@ export const ProductAPI = {
       }
 
       // Cache yoksa veya geçersizse API'den çek
-      console.log('📡 Fetching products from API');
+      console.log('Fetching products from API');
       const response = await apiCall<any[]>('/Product');
       
       // Başarılı response'u cache'e kaydet
       if (response.success && response.value) {
         await AsyncStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(response.value));
         await AsyncStorage.setItem(CACHE_EXPIRY_KEY, (Date.now() + CACHE_DURATION).toString());
-        console.log('✅ Products cached successfully');
+        console.log('Products cached successfully');
       }
       
       return response;
     } catch (error) {
-      console.error('❌ ProductAPI.getAll error:', error);
+      console.error('ProductAPI.getAll error:', error);
       return {
         success: false,
         value: [],
@@ -406,7 +406,7 @@ export const ProductAPI = {
     // Başarılı update işleminden sonra cache'i temizle
     if (response.success) {
       await ProductAPI.clearCache();
-      console.log('✅ Cache cleared after product update');
+      console.log('Cache cleared after product update');
     }
     
     return response;
@@ -425,9 +425,8 @@ export const ProductAPI = {
     return response;
   },
 
-  // Arama (gelecekte eklenebilir)
+  // Arama Client-side
   search: async (query: string): Promise<ServiceResponse<any[]>> => {
-    // Şimdilik client-side search, sonra backend'e eklenebilir
     const allProducts = await ProductAPI.getAll();
     if (allProducts.success && allProducts.value) {
       const filtered = allProducts.value.filter((product: any) =>
@@ -443,9 +442,8 @@ export const ProductAPI = {
     return allProducts;
   },
 
-  // Kategori bazlı filtreleme (gelecekte eklenebilir)
+  // Kategori bazlı filtreleme 
   getByCategory: async (categoryId: string): Promise<ServiceResponse<any[]>> => {
-    // Şimdilik client-side filter, sonra backend'e eklenebilir
     const allProducts = await ProductAPI.getAll();
     if (allProducts.success && allProducts.value) {
       const filtered = allProducts.value.filter((product: any) =>
@@ -458,6 +456,11 @@ export const ProductAPI = {
       };
     }
     return allProducts;
+  },
+
+  // Satıcıya göre ürünleri getir
+  getBySeller: async (seller: string): Promise<ServiceResponse<any[]>> => {
+    return apiCall<any[]>(`/Product/byseller/${encodeURIComponent(seller)}`);
   },
 
   // Basitleştirilmiş fonksiyonlar (UserContext tarzı)

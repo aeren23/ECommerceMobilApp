@@ -29,11 +29,11 @@ export default function HomeScreen() {
   // Kategorileri API'den yükle (Cache'li)
   const loadCategories = async () => {
     try {
-      console.log('🔄 Loading categories...');
+      console.log(' Loading categories...');
       const response = await CategoryAPI.getAll();
       
       if (response.success && response.value) {
-        console.log('✅ Categories loaded successfully');
+        console.log(' Categories loaded successfully');
         setCategoriesData(response.value);
         // Kategori listesini güncelle - "Tümü" seçeneğini ekle
         const categoryNames = ['Tümü', ...response.value.map(cat => cat.name)];
@@ -81,11 +81,11 @@ export default function HomeScreen() {
   const loadProducts = async () => {
     try {
       setIsLoading(true);
-      console.log('🔄 Loading products...');
+      console.log(' Loading products...');
       const response = await ProductAPI.getAll();
       
       if (response.success && response.value) {
-        console.log('✅ Products loaded successfully');
+        console.log(' Products loaded successfully');
         setProducts(response.value);
         setFilteredProducts(response.value);
       } else {
@@ -331,25 +331,43 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
-  // Manuel yenileme fonksiyonu (cache temizleyerek)
-  const refreshData = async () => {
-    try {
-      console.log('🔄 Manual refresh triggered - Clearing cache...');
-      
-      // Cache'i temizle
-      await CategoryAPI.clearCache();
-      await ProductAPI.clearCache();
-      
-      // Verileri yeniden yükle
-      await loadCategories();
-      await loadProducts();
-      
-      console.log('✅ Data refreshed successfully');
-    } catch (error) {
-      console.error('❌ Manual refresh failed:', error);
-      Alert.alert('Hata', 'Yenileme sırasında bir hata oluştu');
-    }
-  };
+  // Header component for FlatList
+  const ListHeaderComponent = useMemo(() => (
+    <View>
+      {/* Kategoriler */}
+      <View style={styles.categoriesContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesContent}
+        >
+          {categories.map((category) => (
+            <CategoryButton key={category} category={category} />
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Kaçırılmaz Fırsatlar */}
+      {discountedProducts.length > 0 && (
+        <View style={styles.dealsSection}>
+          <View style={styles.dealsSectionHeader}>
+            <Text style={styles.dealsTitle}>🔥 Kaçırılmaz Fırsatlar</Text>
+            <Text style={styles.dealsSubtitle}>Sınırlı süre indirimli ürünler</Text>
+          </View>
+          
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.dealsContainer}
+          >
+            {discountedProducts.map((product) => (
+              <DealCard key={product.id} item={product} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  ), [categories, discountedProducts]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -368,70 +386,25 @@ export default function HomeScreen() {
           <Text style={styles.loadingText}>Ürünler yükleniyor...</Text>
         </View>
       ) : (
-        <>
-          {/* Kategoriler */}
-          <View style={styles.categoriesContainer}>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoriesContent}
-            >
-              {categories.map((category) => (
-                <CategoryButton key={category} category={category} />
-              ))}
-            </ScrollView>
-          </View>
-          
-          {/* Scrollable İçerik */}
-          <ScrollView 
-            style={styles.scrollContainer}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-        
-
-        {/* Kaçırılmaz Fırsatlar */}
-        {discountedProducts.length > 0 && (
-          <View style={styles.dealsSection}>
-            <View style={styles.dealsSectionHeader}>
-              <Text style={styles.dealsTitle}>🔥 Kaçırılmaz Fırsatlar</Text>
-              <Text style={styles.dealsSubtitle}>Sınırlı süre indirimli ürünler</Text>
-            </View>
-            
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dealsContainer}
-            >
-              {discountedProducts.map((product) => (
-                <DealCard key={product.id} item={product} />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Ürün Grid - FlatList ile optimize edildi */}
-        <View style={styles.productsGrid}>
-          <FlatList
-            data={filteredProducts}
-            renderItem={({ item }) => <ProductCard item={item} />}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            columnWrapperStyle={styles.row}
-            showsVerticalScrollIndicator={false}
-            // Performans optimizasyonları
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
-            updateCellsBatchingPeriod={50}
-            windowSize={10}
-            initialNumToRender={10}
-            getItemLayout={(data, index) => (
-              {length: 220, offset: 220 * Math.floor(index / 2), index}
-            )}
-          />
-        </View>
-      </ScrollView>
-      </>
+        <FlatList
+          data={filteredProducts}
+          renderItem={({ item }) => <ProductCard item={item} />}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.row}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={ListHeaderComponent}
+          contentContainerStyle={styles.flatListContent}
+          // Performans optimizasyonları
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          windowSize={10}
+          initialNumToRender={10}
+          getItemLayout={(data, index) => (
+            {length: 220, offset: 220 * Math.floor(index / 2), index}
+          )}
+        />
       )}
     </SafeAreaView>
   );
@@ -462,6 +435,10 @@ const styles = StyleSheet.create({
   // Scroll Container Stilleri
   scrollContainer: {
     flex: 1,
+  },
+  flatListContent: {
+    flexGrow: 1,
+    padding: 10,
   },
   scrollContent: {
     flexGrow: 1,
