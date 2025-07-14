@@ -53,15 +53,6 @@ export interface AddCartItemRequest {
   quantity: number;
 }
 
-export interface CreateCategoryDto {
-  name: string;
-}
-
-export interface UpdateCategoryDto {
-  id: string;
-  name: string;
-}
-
 // API Base URL - Basitleştirilmiş
 // Development modunda hep manuel IP kullan
 const DEVICE_IP = '192.168.1.80'; // Bilgisayarın Wi-Fi IP'si
@@ -86,7 +77,12 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
   try {
     // Debug için URL'yi logla
     const fullUrl = `${API_BASE_URL}${endpoint}`;
-    console.log(`API Call: ${method} ${fullUrl}`);
+    console.log(`🔵 API Call: ${method} ${fullUrl}`);
+    
+    // Body'yi logla
+    if (body) {
+      console.log('🔵 Request Body:', JSON.stringify(body, null, 2));
+    }
     
     // Token'ı AsyncStorage'dan al
     const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
@@ -98,23 +94,33 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
     // Token varsa Authorization header'ını ekle
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
-      console.log('Token added to headers');
+      console.log('🔵 Token added to headers');
     } else {
       console.log('❌ No token found');
     }
 
-    console.log('Sending request...');
+    console.log('🔵 Request Headers:', headers);
+    console.log('🔵 Sending request...');
     const response = await fetch(fullUrl, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    console.log(`Response Status: ${response.status} ${response.statusText}`);
+    console.log(`🔴 Response Status: ${response.status} ${response.statusText}`);
 
     // Response body'yi al - önce text olarak al, sonra JSON parse et
     const responseText = await response.text();
-    console.log('Response Text:', responseText);
+    console.log('🔴 Response Text:', responseText);
+
+    // 400 hatasında extra debug
+    if (response.status === 400) {
+      console.log('❌ 400 BAD REQUEST DETAILS:');
+      console.log('❌ Request URL:', fullUrl);
+      console.log('❌ Request Method:', method);
+      console.log('❌ Request Body:', body ? JSON.stringify(body, null, 2) : 'No body');
+      console.log('❌ Response:', responseText);
+    }
 
     let responseData;
     try {
@@ -460,7 +466,12 @@ export const ProductAPI = {
     rating: number;
     tags: string[];
   }): Promise<ServiceResponse<string>> => {
-    const response = await apiCall<string>('/Product', 'PUT', productData);
+    // format: {product: {...}}
+    const requestData = {
+      product: productData
+    };
+    
+    const response = await apiCall<string>('/Product', 'PUT', requestData);
     
     // Başarılı update işleminden sonra cache'i temizle
     if (response.success) {
@@ -920,6 +931,79 @@ export const UserAPI = {
   }
 };
 
+// Admin DTO'ları
+export interface AppUserWithRolesDto {
+  id: string;
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  address?: string;
+  createdAt: string;
+  orders: string[];
+  roles: string[];
+}
+
+export interface OrderListDto {
+  id: string;
+  userId: string;
+  user?: AppUserWithRolesDto;
+  items: OrderItemDto[];
+  totalPrice: number;
+  createdAt: string;
+}
+
+export interface OrderItemDto {
+  id: string;
+  orderId: string;
+  productId: string;
+  product?: any;
+  quantity: number;
+  price: number;
+}
+
+export interface OrderDto {
+  id: string;
+  userId: string;
+  user?: any;
+  items: OrderItemDto[];
+  totalPrice: number;
+  createdAt: string;
+}
+
+// Admin API'leri - ServiceResponse formatını kullanır
+export const AdminAPI = {
+  // Tüm kullanıcıları rollerle getir
+  getAllUsersWithRoles: async (): Promise<ServiceResponse<AppUserWithRolesDto[]>> => {
+    return apiCall<AppUserWithRolesDto[]>('/Admin/users-with-roles');
+  },
+
+  // Tüm siparişleri kullanıcı bilgisiyle getir
+  getAllOrdersWithUsers: async (): Promise<ServiceResponse<OrderListDto[]>> => {
+    return apiCall<OrderListDto[]>('/Admin/orders-with-users');
+  },
+
+  // Sipariş detaylarını getir (admin için)
+  getOrderDetailsById: async (orderId: string): Promise<ServiceResponse<OrderDto>> => {
+    return apiCall<OrderDto>(`/Admin/orders-details/${orderId}`);
+  },
+
+  // Basitleştirilmiş fonksiyonlar
+  getAllUsersWithRolesSimple: async (): Promise<AppUserWithRolesDto[] | null> => {
+    const response = await AdminAPI.getAllUsersWithRoles();
+    return response.success ? response.value : null;
+  },
+
+  getAllOrdersWithUsersSimple: async (): Promise<OrderListDto[] | null> => {
+    const response = await AdminAPI.getAllOrdersWithUsers();
+    return response.success ? response.value : null;
+  },
+
+  getOrderDetailsByIdSimple: async (orderId: string): Promise<OrderDto | null> => {
+    const response = await AdminAPI.getOrderDetailsById(orderId);
+    return response.success ? response.value : null;
+  }
+};
+
 // Default export
 const ApiService = {
   apiCall,
@@ -928,6 +1012,7 @@ const ApiService = {
   Cart: CartAPI,
   Order: OrderAPI,
   User: UserAPI,
+  Admin: AdminAPI,
   Token: TokenUtils
 };
 

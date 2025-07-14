@@ -13,6 +13,8 @@ export default function AdminLayout() {
         <Stack.Screen name="categories" options={{ headerShown: false }} />
         <Stack.Screen name="edit-product" options={{ headerShown: false }} />
         <Stack.Screen name="products" options={{ headerShown: false }} />
+        <Stack.Screen name="users" options={{ headerShown: false }} />
+        <Stack.Screen name="orders" options={{ headerShown: false }} />
       </Stack>
     </View>
   );

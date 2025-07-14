@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,13 +7,26 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
 import { router } from 'expo-router';
+import { AdminAPI, ProductAPI, CategoryAPI, AppUserWithRolesDto, OrderListDto } from '../services/ApiService';
 
 export default function AdminPanelScreen() {
   const { user, hasRole } = useUser();
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalProducts: 0,
+    pendingOrders: 0,
+    totalSellers: 0,
+    monthlyRevenue: 0,
+    totalCategories: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [users, setUsers] = useState<AppUserWithRolesDto[]>([]);
+  const [orders, setOrders] = useState<OrderListDto[]>([]);
 
   // Eğer admin değilse erişim engelle
   if (!hasRole('admin')) {
@@ -37,19 +50,94 @@ export default function AdminPanelScreen() {
     );
   }
 
+  // Admin dashboard verilerini yükle
+  useEffect(() => {
+    if (hasRole('admin')) {
+      loadDashboardData();
+    }
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      console.log('🔄 Loading admin dashboard data...');
+
+      // Paralel olarak tüm verileri yükle
+      const [usersResponse, ordersResponse, productsResponse, categoriesResponse] = await Promise.all([
+        AdminAPI.getAllUsersWithRoles(),
+        AdminAPI.getAllOrdersWithUsers(),
+        ProductAPI.getAll(),
+        CategoryAPI.getAll()
+      ]);
+
+      console.log('📊 Dashboard data loaded:', {
+        users: usersResponse.success ? usersResponse.value?.length : 0,
+        orders: ordersResponse.success ? ordersResponse.value?.length : 0,
+        products: productsResponse.success ? productsResponse.value?.length : 0,
+        categories: categoriesResponse.success ? categoriesResponse.value?.length : 0
+      });
+
+      // Kullanıcı verileri
+      if (usersResponse.success && usersResponse.value) {
+        setUsers(usersResponse.value);
+        const sellers = usersResponse.value.filter(user => user.roles.includes('Seller'));
+        
+        setStats(prev => ({
+          ...prev,
+          totalUsers: usersResponse.value?.length || 0,
+          totalSellers: sellers.length
+        }));
+      }
+
+      // Sipariş verileri
+      if (ordersResponse.success && ordersResponse.value) {
+        setOrders(ordersResponse.value);
+        const totalRevenue = ordersResponse.value.reduce((sum, order) => sum + order.totalPrice, 0);
+        
+        setStats(prev => ({
+          ...prev,
+          pendingOrders: ordersResponse.value?.length || 0,
+          monthlyRevenue: totalRevenue
+        }));
+      }
+
+      // Ürün verileri
+      if (productsResponse.success && productsResponse.value) {
+        setStats(prev => ({
+          ...prev,
+          totalProducts: productsResponse.value?.length || 0
+        }));
+      }
+
+      // Kategori verileri
+      if (categoriesResponse.success && categoriesResponse.value) {
+        setStats(prev => ({
+          ...prev,
+          totalCategories: categoriesResponse.value?.length || 0
+        }));
+      }
+
+    } catch (error) {
+      console.error('❌ Error loading dashboard data:', error);
+      Alert.alert('Hata', 'Dashboard verileri yüklenirken bir hata oluştu');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const menuItems = [
     {
       id: 'users',
       title: 'Kullanıcı Yönetimi',
-      subtitle: 'Tüm kullanıcıları görüntüleyin ve yönetin',
+      subtitle: `${stats.totalUsers} kullanıcı | ${stats.totalSellers} satıcı`,
       icon: 'people-outline',
       color: '#007AFF',
-      onPress: () => Alert.alert('Yakında', 'Kullanıcı yönetimi yakında aktif olacak!')
+      onPress: () => router.push('/admin/users')
     },
     {
       id: 'products',
       title: 'Ürün Yönetimi',
-      subtitle: 'Tüm ürünleri görüntüleyin ve yönetin',
+      subtitle: `${stats.totalProducts} aktif ürün`,
       icon: 'cube-outline',
       color: '#34C759',
       onPress: () => router.push('/admin/products')
@@ -57,15 +145,15 @@ export default function AdminPanelScreen() {
     {
       id: 'orders',
       title: 'Sipariş Yönetimi',
-      subtitle: 'Tüm siparişleri görüntüleyin ve yönetin',
+      subtitle: `${stats.pendingOrders} sipariş | ₺${stats.monthlyRevenue.toLocaleString()} ciro`,
       icon: 'receipt-outline',
       color: '#FF9500',
-      onPress: () => Alert.alert('Yakında', 'Sipariş yönetimi yakında aktif olacak!')
+      onPress: () => router.push('/admin/orders')
     },
     {
       id: 'categories',
       title: 'Kategori Yönetimi',
-      subtitle: 'Ürün kategorilerini yönetin',
+      subtitle: `${stats.totalCategories} kategori`,
       icon: 'folder-outline',
       color: '#AF52DE',
       onPress: () => router.push('/admin/categories')
@@ -112,30 +200,32 @@ export default function AdminPanelScreen() {
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>0</Text>
+            <Text style={styles.statsNumber}>{isLoading ? '...' : stats.totalUsers}</Text>
             <Text style={styles.statsLabel}>Toplam Kullanıcı</Text>
           </View>
           <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>0</Text>
+            <Text style={styles.statsNumber}>{isLoading ? '...' : stats.totalProducts}</Text>
             <Text style={styles.statsLabel}>Aktif Ürün</Text>
           </View>
           <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>0</Text>
-            <Text style={styles.statsLabel}>Bekleyen Sipariş</Text>
+            <Text style={styles.statsNumber}>{isLoading ? '...' : stats.pendingOrders}</Text>
+            <Text style={styles.statsLabel}>Toplam Sipariş</Text>
           </View>
         </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>0</Text>
+            <Text style={styles.statsNumber}>{isLoading ? '...' : stats.totalSellers}</Text>
             <Text style={styles.statsLabel}>Satıcı Sayısı</Text>
           </View>
           <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>₺0</Text>
-            <Text style={styles.statsLabel}>Bu Ay Ciro</Text>
+            <Text style={styles.statsNumber}>
+              {isLoading ? '...' : `₺${stats.monthlyRevenue.toLocaleString()}`}
+            </Text>
+            <Text style={styles.statsLabel}>Toplam Ciro</Text>
           </View>
           <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>0</Text>
+            <Text style={styles.statsNumber}>{isLoading ? '...' : stats.totalCategories}</Text>
             <Text style={styles.statsLabel}>Kategori Sayısı</Text>
           </View>
         </View>
@@ -143,22 +233,29 @@ export default function AdminPanelScreen() {
         {/* Menu Items */}
         <View style={styles.menuContainer}>
           <Text style={styles.sectionTitle}>Yönetim Paneli</Text>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuItem}
-              onPress={item.onPress}
-            >
-              <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
-                <Ionicons name={item.icon as any} size={24} color={item.color} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
-            </TouchableOpacity>
-          ))}
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#FF3B30" />
+              <Text style={styles.loadingText}>Dashboard yükleniyor...</Text>
+            </View>
+          ) : (
+            menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.menuItem}
+                onPress={item.onPress}
+              >
+                <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                  <Ionicons name={item.icon as any} size={24} color={item.color} />
+                </View>
+                <View style={styles.menuContent}>
+                  <Text style={styles.menuTitle}>{item.title}</Text>
+                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#8E8E93" />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Quick Actions */}
@@ -364,5 +461,17 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 10,
+    textAlign: 'center',
   },
 });

@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ProductAPI, CategoryAPI, CategoryDto } from '../../services/ApiService';
-import { Product } from '../../data/products';
+import { Product, tagConfig } from '../../data/products';
 import { Picker } from '@react-native-picker/picker';
 
 export default function EditProductScreen() {
@@ -33,7 +33,21 @@ export default function EditProductScreen() {
   const [seller, setSeller] = useState('');
   const [stock, setStock] = useState('');
   const [rating, setRating] = useState('');
-  const [tags, setTags] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  // Mevcut tag'ler - tagConfig'den al
+  const availableTags = Object.keys(tagConfig);
+
+  // Tag seçme/kaldırma fonksiyonu
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tag)) {
+        return prev.filter(t => t !== tag);
+      } else {
+        return [...prev, tag];
+      }
+    });
+  };
 
   // Ürün ve kategorileri yükle
   useEffect(() => {
@@ -63,7 +77,7 @@ export default function EditProductScreen() {
         setSeller(productData.seller);
         setStock(productData.stock.toString());
         setRating(productData.rating.toString());
-        setTags(productData.tags.join(', '));
+        setSelectedTags(productData.tags || []);
       } else {
         Alert.alert('Hata', 'Ürün bulunamadı');
         router.back();
@@ -128,21 +142,27 @@ export default function EditProductScreen() {
         seller: seller.trim(),
         stock: stockNum,
         rating: ratingNum,
-        tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+        tags: selectedTags
       };
 
+      console.log('🔄 Admin - Sending update data:', JSON.stringify(updateData, null, 2));
+      console.log('🔄 Admin - Selected tags:', selectedTags);
+      console.log('🔄 Admin - productId:', productId);
+      
       const response = await ProductAPI.update(updateData);
+      console.log('📨 Admin - Update response:', JSON.stringify(response, null, 2));
 
       if (response.success) {
         Alert.alert('Başarılı', 'Ürün başarıyla güncellendi', [
           { text: 'Tamam', onPress: () => router.back() }
         ]);
       } else {
+        console.error('❌ Update failed:', response.errorMessage);
         Alert.alert('Hata', response.errorMessage || 'Ürün güncellenirken bir hata oluştu');
       }
 
     } catch (error) {
-      console.error('Error updating product:', error);
+      console.error('❌ Error updating product:', error);
       Alert.alert('Hata', 'Ürün güncellenirken bir hata oluştu');
     } finally {
       setIsSaving(false);
@@ -292,12 +312,36 @@ export default function EditProductScreen() {
           {/* Etiketler */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Etiketler</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="indirimli, yeni, popüler (virgül ile ayırın)"
-              value={tags}
-              onChangeText={setTags}
-            />
+            <View style={styles.tagsContainer}>
+              {availableTags.map((tag) => {
+                const isSelected = selectedTags.includes(tag);
+                const tagStyle = tagConfig[tag];
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[
+                      styles.tagItem,
+                      {
+                        backgroundColor: isSelected ? tagStyle.bgColor : '#f0f0f0',
+                        borderColor: isSelected ? tagStyle.color : '#ddd',
+                      }
+                    ]}
+                    onPress={() => toggleTag(tag)}
+                  >
+                    <Text style={styles.tagIcon}>{tagStyle.icon}</Text>
+                    <Text style={[
+                      styles.tagText,
+                      { color: isSelected ? tagStyle.color : '#666' }
+                    ]}>
+                      {tagStyle.text}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={16} color={tagStyle.color} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           {/* Güncelle Butonu */}
@@ -412,5 +456,29 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  tagIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  tagText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 6,
   },
 });

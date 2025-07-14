@@ -32,11 +32,11 @@ export default function HomeScreen() {
   // Kategorileri API'den yükle - cache'ten yüklensin çünkü kategoriler daha az değişir
   const loadCategories = async (forceRefresh: boolean = false) => {
     try {
-      console.log(forceRefresh ? '🔄 Refreshing categories...' : '📂 Loading categories...');
+      console.log(forceRefresh ? 'Refreshing categories...' : 'Loading categories...');
       const response = await CategoryAPI.getAll(forceRefresh);
       
       if (response.success && response.value) {
-        console.log('✅ Categories loaded successfully:', response.value.length, 'categories');
+        console.log('Categories loaded successfully:', response.value.length, 'categories');
         setCategoriesData(response.value);
         // Kategori listesini güncelle - "Tümü" seçeneğini ekle
         const categoryNames = ['Tümü', ...response.value.map(cat => cat.name)];
@@ -82,7 +82,7 @@ export default function HomeScreen() {
   // Sayfa her açıldığında fresh products yükle
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 HomeScreen focused - Refreshing products...');
+      console.log('HomeScreen focused - Refreshing products...');
       loadProducts(true); // Her zaman fresh data çek
     }, [])
   );
@@ -91,11 +91,11 @@ export default function HomeScreen() {
   const loadProducts = async (forceRefresh: boolean = true) => {
     try {
       setIsLoading(true);
-      console.log(forceRefresh ? '🔄 Loading fresh products...' : '📦 Loading products...');
+      console.log(forceRefresh ? 'Loading fresh products...' : 'Loading products...');
       const response = await ProductAPI.getAll(forceRefresh);
       
       if (response.success && response.value) {
-        console.log('✅ Products loaded successfully:', response.value.length, 'products');
+        console.log('Products loaded successfully:', response.value.length, 'products');
         setProducts(response.value);
         setFilteredProducts(response.value);
       } else {
@@ -146,28 +146,6 @@ export default function HomeScreen() {
     return categoryMap[categoryName] || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
   };
 
-  // Kategori adını bul
-  const getCategoryName = (categoryId: string): string => {
-    // Önce gerçek kategori verilerinden ara
-    const category = categoriesData.find(cat => cat.id === categoryId);
-    if (category) {
-      return category.name;
-    }
-    
-    // Fallback - eski hardcoded mapping
-    const nameMap: { [key: string]: string } = {
-      'a1b2c3d4-e5f6-7890-abcd-ef1234567890': 'Elektronik',
-      'b2c3d4e5-f6g7-8901-bcde-f12345678901': 'Giyim',
-      'c3d4e5f6-g7h8-9012-cdef-123456789012': 'Ev & Bahçe',
-      'd4e5f6g7-h8i9-0123-def1-234567890123': 'Spor',
-      'e5f6g7h8-i9j0-1234-ef12-345678901234': 'Kitap',
-      'f6g7h8i9-j0k1-2345-f123-456789012345': 'Kozmetik',
-      'g7h8i9j0-k1l2-3456-1234-567890123456': 'Oyuncak',
-      'h8i9j0k1-l2m3-4567-2345-678901234567': 'Mutfak',
-    };
-    return nameMap[categoryId] || 'Diğer';
-  };
-
   // Hızlı sepete ekleme fonksiyonu
   const handleQuickAddToCart = async (product: Product) => {
     console.log('🛒 handleQuickAddToCart called for product:', product.id);
@@ -181,9 +159,9 @@ export default function HomeScreen() {
       console.log('🛒 About to call addToCart...');
       // Backend API'ye sepete ekleme isteği
       await addToCart(product.id, 1);
-      console.log('🛒 addToCart completed');
+      console.log('addToCart completed');
     } catch (error) {
-      console.error('❌ Error in handleQuickAddToCart:', error);
+      console.error('Error in handleQuickAddToCart:', error);
       Alert.alert('Hata', 'Ürün sepete eklenirken bir hata oluştu');
     }
   };
@@ -249,7 +227,7 @@ export default function HomeScreen() {
     );
   };
 
-  // Ürün kartı komponenti - React.memo ile optimize edildi
+  // Ürün kartı komponenti
   const ProductCard = React.memo(({ item }: { item: Product }) => (
     <TouchableOpacity 
       style={styles.productCard}
@@ -263,7 +241,19 @@ export default function HomeScreen() {
           <View style={styles.tagContainer}>
             {item.tags.slice(0, 2).map((tag, index) => {
               const config = tagConfig[tag as keyof typeof tagConfig];
-              if (!config) return null;
+              if (!config) {
+               return (
+                  <View 
+                    key={index} 
+                    style={[styles.tag, { backgroundColor: '#F0F0F0' }]}
+                  >
+                    <Text style={styles.tagIcon}>🏷️</Text>
+                    <Text style={[styles.tagText, { color: '#666' }]}>
+                      {tag}
+                    </Text>
+                  </View>
+                );
+              }
               
               return (
                 <View 
