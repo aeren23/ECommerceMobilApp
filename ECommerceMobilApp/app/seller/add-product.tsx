@@ -35,8 +35,8 @@ export default function AddProductScreen() {
 
   // Mevcut tag'lar
   const availableTags = [
-    'Yeni', 'İndirim', 'Ücretsiz Kargo', 'Hızlı Teslimat', 
-    'Popüler', 'Özel Fiyat', 'Sınırlı Sayıda', 'Kaliteli'
+    'çok-satılan', 'indirimli', 'yeni', 'sınırlı', 
+    'Popüler', 'premium', 'popüler', 'gaming'
   ];
 
   // Kategorileri API'den yükle

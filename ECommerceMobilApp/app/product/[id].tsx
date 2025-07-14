@@ -10,10 +10,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Product, tagConfig } from '../../data/products';
 import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
+import { useUser } from '../../context/UserContext';
 import { ProductAPI } from '../../services/ApiService';
 
 export default function ProductDetailScreen() {
@@ -23,6 +26,8 @@ export default function ProductDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const insets = useSafeAreaInsets();
   const { addToCart: addToCartContext, cartItems } = useCart();
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const { isLoggedIn } = useUser();
 
   // Ürünü API'den yükle
   useEffect(() => {
@@ -129,12 +134,55 @@ export default function ProductDetailScreen() {
     setQuantity(1);
   };
 
+  // Wishlist toggle fonksiyonu
+  const handleWishlistToggle = async () => {
+    if (!product) return;
+    
+    if (!isLoggedIn) {
+      Alert.alert(
+        'Giriş Gerekli',
+        'Favorilere eklemek için giriş yapmalısınız',
+        [
+          { text: 'İptal', style: 'cancel' },
+          { 
+            text: 'Giriş Yap', 
+            onPress: () => router.push('/login')
+          }
+        ]
+      );
+      return;
+    }
+
+    try {
+      if (isInWishlist(product.id)) {
+        await removeFromWishlist(product.id);
+      } else {
+        await addToWishlist(product.id);
+      }
+    } catch (error) {
+      console.error('❌ Error toggling wishlist:', error);
+      Alert.alert('Hata', 'İşlem sırasında bir hata oluştu');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Ürün Resmi */}
         <View style={styles.imageContainer}>
           <Image source={{ uri: product.image }} style={styles.productImage} />
+          
+          {/* Wishlist Butonu */}
+          <TouchableOpacity
+            style={styles.wishlistButton}
+            onPress={handleWishlistToggle}
+          >
+            <Ionicons
+              name={isInWishlist(product.id) ? "heart" : "heart-outline"}
+              size={24}
+              color={isInWishlist(product.id) ? "#FF3B30" : "#666"}
+            />
+          </TouchableOpacity>
           
           {/* Etiketler */}
           {product.tags && product.tags.length > 0 && (
@@ -242,18 +290,39 @@ export default function ProductDetailScreen() {
 
       {/* Alt Butonlar */}
       <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity 
-          style={[
-            styles.addToCartButton,
-            product.stock === 0 && styles.disabledButton
-          ]}
-          onPress={handleAddToCart}
-          disabled={product.stock === 0}
-        >
-          <Text style={styles.addToCartButtonText}>
-            {product.stock === 0 ? 'Stok Tükendi' : 'Sepete Ekle'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          {/* Favorilere Ekle Butonu */}
+          <TouchableOpacity 
+            style={styles.favoriteButton}
+            onPress={handleWishlistToggle}
+          >
+            <Ionicons
+              name={isInWishlist(product.id) ? "heart" : "heart-outline"}
+              size={20}
+              color={isInWishlist(product.id) ? "#FF3B30" : "#666"}
+            />
+            <Text style={[
+              styles.favoriteButtonText,
+              isInWishlist(product.id) && styles.favoriteButtonTextActive
+            ]}>
+              {isInWishlist(product.id) ? 'Favorilerde' : 'Favorilere Ekle'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Sepete Ekle Butonu */}
+          <TouchableOpacity 
+            style={[
+              styles.addToCartButton,
+              product.stock === 0 && styles.disabledButton
+            ]}
+            onPress={handleAddToCart}
+            disabled={product.stock === 0}
+          >
+            <Text style={styles.addToCartButtonText}>
+              {product.stock === 0 ? 'Stok Tükendi' : 'Sepete Ekle'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -450,11 +519,38 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  favoriteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    flex: 1,
+  },
+  favoriteButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginLeft: 6,
+  },
+  favoriteButtonTextActive: {
+    color: '#FF3B30',
+  },
   addToCartButton: {
     backgroundColor: '#B8860B',
-    padding: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     borderRadius: 12,
     alignItems: 'center',
+    flex: 2,
   },
   disabledButton: {
     backgroundColor: '#ccc',
@@ -495,5 +591,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 10,
+  },
+  wishlistButton: {
+    position: 'absolute',
+    top: 30,
+    right: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });

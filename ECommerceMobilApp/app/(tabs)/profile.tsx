@@ -190,7 +190,13 @@ export default function ProfileScreen() {
             
             <TouchableOpacity 
               style={styles.menuItem}
-              onPress={() => showFeature('Favorilerim')}
+              onPress={() => {
+                if (!isLoggedIn) {
+                  Alert.alert('Uyarı', 'Favorilerinizi görmek için giriş yapmanız gerekiyor.');
+                  return;
+                }
+                router.push('/favorites');
+              }}
             >
               <Ionicons name="heart-outline" size={20} color="#666" />
               <Text style={styles.menuItemText}>Favorilerim</Text>

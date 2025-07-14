@@ -52,7 +52,7 @@ export default function AdminPanelScreen() {
       subtitle: 'Tüm ürünleri görüntüleyin ve yönetin',
       icon: 'cube-outline',
       color: '#34C759',
-      onPress: () => Alert.alert('Yakında', 'Ürün yönetimi yakında aktif olacak!')
+      onPress: () => router.push('/admin/products')
     },
     {
       id: 'orders',
@@ -68,7 +68,7 @@ export default function AdminPanelScreen() {
       subtitle: 'Ürün kategorilerini yönetin',
       icon: 'folder-outline',
       color: '#AF52DE',
-      onPress: () => Alert.alert('Yakında', 'Kategori yönetimi yakında aktif olacak!')
+      onPress: () => router.push('/admin/categories')
     },
     {
       id: 'reports',

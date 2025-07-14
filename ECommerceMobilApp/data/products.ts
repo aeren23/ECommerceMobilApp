@@ -28,7 +28,9 @@ export const tagConfig = {
   'sınırlı': { color: '#AF52DE', bgColor: '#F0E5F7', icon: '⚡', text: 'Sınırlı' },
   'premium': { color: '#B8860B', bgColor: '#F5F0E5', icon: '👑', text: 'Premium' },
   'popüler': { color: '#007AFF', bgColor: '#E5F0FF', icon: '⭐', text: 'Popüler' },
-  'gaming': { color: '#FF2D92', bgColor: '#FFE5F0', icon: '🎮', text: 'Gaming' }
+  'gaming': { color: '#FF2D92', bgColor: '#FFE5F0', icon: '🎮', text: 'Gaming' },
+  'spor': { color: '#4CD964', bgColor: '#E5F7E5', icon: '🏋️', text: 'Spor' },
+  'Oyuncak' : { color: '#FF9500', bgColor: '#FFF0E5', icon: '🧸', text: 'Oyuncak' }
 };
 
 export const categories = [

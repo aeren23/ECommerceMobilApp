@@ -2,12 +2,14 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { CartProvider } from '../context/CartContext';
 import { UserProvider } from '../context/UserContext';
+import { WishlistProvider } from '../context/WishlistContext';
 
 export default function RootLayout() {
   return (
     <UserProvider>
       <CartProvider>
-        <Stack>
+        <WishlistProvider>
+          <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="seller" options={{ headerShown: false }} />
@@ -15,6 +17,11 @@ export default function RootLayout() {
             headerShown: false,
             contentStyle: { paddingBottom: 50 }
           }} />
+          <Stack.Screen name="admin-panel" options={{ 
+            headerShown: false,
+            contentStyle: { paddingBottom: 50 }
+          }} />
+          <Stack.Screen name="admin" options={{ headerShown: false }} />
           <Stack.Screen 
             name="product/[id]" 
             options={{ 
@@ -37,8 +44,15 @@ export default function RootLayout() {
               }
              }}
           />
+          <Stack.Screen 
+            name="favorites" 
+            options={{headerShown: false ,
+              contentStyle: { paddingBottom: 50, paddingTop: 30, backgroundColor: '#f8f9fa' }
+            }}
+          />
         </Stack>
         <StatusBar style="auto" />
+        </WishlistProvider>
       </CartProvider>
     </UserProvider>
   );

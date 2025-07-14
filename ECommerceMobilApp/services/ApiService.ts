@@ -64,7 +64,7 @@ export interface UpdateCategoryDto {
 
 // API Base URL - Basitleştirilmiş
 // Development modunda hep manuel IP kullan
-const DEVICE_IP = '10.216.64.84'; // Bilgisayarın Wi-Fi IP'si
+const DEVICE_IP = '192.168.1.80'; // Bilgisayarın Wi-Fi IP'si
 const API_PORT = '5222';
 
 const API_BASE_URL = __DEV__ 
@@ -282,24 +282,27 @@ export const CategoryAPI = {
   },
 
   // Tüm kategorileri getir (cache'li)
-  getAll: async (): Promise<ServiceResponse<CategoryDto[]>> => {
+  getAll: async (forceRefresh: boolean = false): Promise<ServiceResponse<CategoryDto[]>> => {
     try {
-      // Önce cache'e bak
-      const isCacheValid = await CategoryAPI.isCacheValid();
-      if (isCacheValid) {
-        const cachedCategories = await AsyncStorage.getItem(CATEGORIES_CACHE_KEY);
-        if (cachedCategories) {
-          console.log('Loading categories from cache');
-          return {
-            success: true,
-            value: JSON.parse(cachedCategories),
-            errorMessage: undefined
-          };
+      // ForceRefresh true ise cache'i atla
+      if (!forceRefresh) {
+        // Önce cache'e bak
+        const isCacheValid = await CategoryAPI.isCacheValid();
+        if (isCacheValid) {
+          const cachedCategories = await AsyncStorage.getItem(CATEGORIES_CACHE_KEY);
+          if (cachedCategories) {
+            console.log('✅ Loading categories from cache');
+            return {
+              success: true,
+              value: JSON.parse(cachedCategories),
+              errorMessage: undefined
+            };
+          }
         }
       }
 
-      // Cache yoksa veya geçersizse API'den çek
-      console.log('Fetching categories from API');
+      // Cache yoksa, geçersizse veya forceRefresh true ise API'den çek
+      console.log(forceRefresh ? '🔄 Force refreshing categories from API' : '🌐 Fetching categories from API');
       const response = await apiCall<CategoryDto[]>('/Category');
       
       // Başarılı response'u cache'e kaydet
@@ -368,24 +371,27 @@ export const CategoryAPI = {
 // Product API'leri - ServiceResponse formatını kullanır + Cache mekanizması
 export const ProductAPI = {
   // Tüm ürünleri getir (cache'li)
-  getAll: async (): Promise<ServiceResponse<any[]>> => {
+  getAll: async (forceRefresh: boolean = false): Promise<ServiceResponse<any[]>> => {
     try {
-      // Önce cache'e bak
-      const isCacheValid = await CategoryAPI.isCacheValid();
-      if (isCacheValid) {
-        const cachedProducts = await AsyncStorage.getItem(PRODUCTS_CACHE_KEY);
-        if (cachedProducts) {
-          console.log('✅ Loading products from cache');
-          return {
-            success: true,
-            value: JSON.parse(cachedProducts),
-            errorMessage: undefined
-          };
+      // ForceRefresh true ise cache'i atla
+      if (!forceRefresh) {
+        // Önce cache'e bak
+        const isCacheValid = await CategoryAPI.isCacheValid();
+        if (isCacheValid) {
+          const cachedProducts = await AsyncStorage.getItem(PRODUCTS_CACHE_KEY);
+          if (cachedProducts) {
+            console.log('✅ Loading products from cache');
+            return {
+              success: true,
+              value: JSON.parse(cachedProducts),
+              errorMessage: undefined
+            };
+          }
         }
       }
 
-      // Cache yoksa veya geçersizse API'den çek
-      console.log('Fetching products from API');
+      // Cache yoksa, geçersizse veya forceRefresh true ise API'den çek
+      console.log(forceRefresh ? '🔄 Force refreshing products from API' : '🌐 Fetching products from API');
       const response = await apiCall<any[]>('/Product');
       
       // Başarılı response'u cache'e kaydet
@@ -517,8 +523,8 @@ export const ProductAPI = {
   },
 
   // Basitleştirilmiş fonksiyonlar (UserContext tarzı)
-  getAllSimple: async (): Promise<any[] | null> => {
-    const response = await ProductAPI.getAll();
+  getAllSimple: async (forceRefresh: boolean = false): Promise<any[] | null> => {
+    const response = await ProductAPI.getAll(forceRefresh);
     return response.success ? response.value : null;
   },
 
@@ -806,7 +812,59 @@ export const TokenUtils = {
   }
 };
 
-// Default export
+// Wishlist API'leri - ServiceResponse formatını kullanır
+export const WishlistAPI = {
+  // Kullanıcının wishlist'ini getir (sadece ürün ID'leri)
+  getWishlist: async (): Promise<ServiceResponse<string[]>> => {
+    return apiCall<string[]>('/Wishlist');
+  },
+
+  // Wishlist'e ürün ekle
+  addToWishlist: async (productId: string): Promise<ServiceResponse<any>> => {
+    return apiCall<any>(`/Wishlist/add/${productId}`, 'POST');
+  },
+
+  // Wishlist'ten ürün çıkar
+  removeFromWishlist: async (productId: string): Promise<ServiceResponse<any>> => {
+    return apiCall<any>(`/Wishlist/remove/${productId}`, 'DELETE');
+  },
+
+  // Wishlist'i tamamen temizle
+  clearWishlist: async (): Promise<ServiceResponse<any>> => {
+    return apiCall<any>('/Wishlist/clear', 'DELETE');
+  },
+
+  // Basitleştirilmiş fonksiyonlar
+  getWishlistSimple: async (): Promise<string[] | null> => {
+    const response = await WishlistAPI.getWishlist();
+    return response.success ? response.value : null;
+  },
+
+  addToWishlistSimple: async (productId: string): Promise<{ success: boolean; message?: string }> => {
+    const response = await WishlistAPI.addToWishlist(productId);
+    return {
+      success: response.success,
+      message: response.success ? undefined : response.errorMessage
+    };
+  },
+
+  removeFromWishlistSimple: async (productId: string): Promise<{ success: boolean; message?: string }> => {
+    const response = await WishlistAPI.removeFromWishlist(productId);
+    return {
+      success: response.success,
+      message: response.success ? undefined : response.errorMessage
+    };
+  },
+
+  clearWishlistSimple: async (): Promise<{ success: boolean; message?: string }> => {
+    const response = await WishlistAPI.clearWishlist();
+    return {
+      success: response.success,
+      message: response.success ? undefined : response.errorMessage
+    };
+  }
+};
+
 // User API'leri - ServiceResponse formatını kullanır
 export const UserAPI = {
   // Profil bilgilerini getir

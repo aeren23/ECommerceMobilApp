@@ -11,9 +11,11 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import { Product, tagConfig } from '../../data/products';
 import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
 import { ProductAPI, CategoryAPI, CategoryDto } from '../../services/ApiService';
 
 export default function HomeScreen() {
@@ -25,15 +27,16 @@ export default function HomeScreen() {
   const [categoriesData, setCategoriesData] = useState<CategoryDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addToCart } = useCart();
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
 
-  // Kategorileri API'den yükle (Cache'li)
-  const loadCategories = async () => {
+  // Kategorileri API'den yükle - cache'ten yüklensin çünkü kategoriler daha az değişir
+  const loadCategories = async (forceRefresh: boolean = false) => {
     try {
-      console.log(' Loading categories...');
-      const response = await CategoryAPI.getAll();
+      console.log(forceRefresh ? '🔄 Refreshing categories...' : '📂 Loading categories...');
+      const response = await CategoryAPI.getAll(forceRefresh);
       
       if (response.success && response.value) {
-        console.log(' Categories loaded successfully');
+        console.log('✅ Categories loaded successfully:', response.value.length, 'categories');
         setCategoriesData(response.value);
         // Kategori listesini güncelle - "Tümü" seçeneğini ekle
         const categoryNames = ['Tümü', ...response.value.map(cat => cat.name)];
@@ -70,22 +73,29 @@ export default function HomeScreen() {
     }
   };
 
-  // Ürünleri API'den yükle - sadece component mount olduğunda
+  // İlk yükleme - sadece component mount olduğunda
   useEffect(() => {
-    console.log('📱 HomeScreen mounted - Loading data...');
-    loadCategories();
-    loadProducts();
+    console.log('📱 HomeScreen mounted - Loading initial data...');
+    loadCategories(false); // Kategoriler için cache kullan
   }, []); // Boş dependency array - sadece mount'ta çalışır
 
-  // Ürünleri API'den yükle (Cache'li)
-  const loadProducts = async () => {
+  // Sayfa her açıldığında fresh products yükle
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 HomeScreen focused - Refreshing products...');
+      loadProducts(true); // Her zaman fresh data çek
+    }, [])
+  );
+
+  // Ürünleri API'den yükle - her açılışta fresh data
+  const loadProducts = async (forceRefresh: boolean = true) => {
     try {
       setIsLoading(true);
-      console.log(' Loading products...');
-      const response = await ProductAPI.getAll();
+      console.log(forceRefresh ? '🔄 Loading fresh products...' : '📦 Loading products...');
+      const response = await ProductAPI.getAll(forceRefresh);
       
       if (response.success && response.value) {
-        console.log(' Products loaded successfully');
+        console.log('✅ Products loaded successfully:', response.value.length, 'products');
         setProducts(response.value);
         setFilteredProducts(response.value);
       } else {
@@ -178,6 +188,19 @@ export default function HomeScreen() {
     }
   };
 
+  // Wishlist toggle fonksiyonu
+  const handleWishlistToggle = async (product: Product) => {
+    try {
+      if (isInWishlist(product.id)) {
+        await removeFromWishlist(product.id);
+      } else {
+        await addToWishlist(product.id);
+      }
+    } catch (error) {
+      console.error('❌ Error toggling wishlist:', error);
+    }
+  };
+
   // İndirimli ürünleri filtrele - useMemo ile optimize et
   const discountedProducts = useMemo(() => 
     filteredProducts.filter(product => 
@@ -256,6 +279,21 @@ export default function HomeScreen() {
             })}
           </View>
         )}
+        
+        {/* Wishlist Butonu */}
+        <TouchableOpacity
+          style={styles.wishlistButton}
+          onPress={(e) => {
+            e.stopPropagation(); // Ürün detayına gitmesini engelle
+            handleWishlistToggle(item);
+          }}
+        >
+          <Ionicons
+            name={isInWishlist(item.id) ? "heart" : "heart-outline"}
+            size={20}
+            color={isInWishlist(item.id) ? "#FF3B30" : "#666"}
+          />
+        </TouchableOpacity>
       </View>
       
       <View style={styles.productInfo}>
@@ -705,5 +743,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 10,
+  },
+  wishlistButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 15,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });
