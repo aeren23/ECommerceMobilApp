@@ -23,7 +23,100 @@ export interface UpdateCategoryDto {
   name: string;
 }
 
-// Cart DTO'ları - Backend'den gelen format
+// Coupon DTO'ları
+export interface CouponDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  type: number; // 1: Percentage, 2: FixedAmount
+  value: number;
+  minimumAmount?: number;
+  startDate: string;
+  endDate: string;
+  usageLimit?: number;
+  usageLimitPerUser?: number;
+  isActive: boolean;
+  createdById: string;
+  createdBy?: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+  productId: string;
+  product?: {
+    id: string;
+    name: string;
+    image: string;
+  };
+  currentUsageCount: number;
+}
+
+export interface CreateCouponDto {
+  code: string;
+  name: string;
+  description?: string;
+  type: number; // 1: Percentage, 2: FixedAmount
+  value: number;
+  minimumAmount?: number;
+  startDate: string;
+  endDate: string;
+  usageLimit?: number;
+  usageLimitPerUser?: number;
+  isActive: boolean;
+  productId: string;
+  createdBy?: string; // Backend'de zorunlu
+}
+
+export interface UpdateCouponDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  type: number;
+  value: number;
+  minimumAmount?: number;
+  startDate: string;
+  endDate: string;
+  usageLimit?: number;
+  usageLimitPerUser?: number;
+  isActive: boolean;
+  productId: string;
+  createdBy?: string;
+}
+
+export interface CouponValidationResult {
+  isValid: boolean;
+  discountAmount: number;
+  finalPrice: number;
+  message: string;
+  coupon?: {
+    id: string;
+    code: string;
+    name: string;
+    description: string;
+    type: number;
+    value: number;
+    minimumAmount?: number;
+    startDate: string;
+    endDate: string;
+    usageLimit?: number;
+    usageLimitPerUser?: number;
+    currentUsageCount: number;
+    isActive: boolean;
+    createdBy: string;
+    productId: string;
+  };
+}
+
+export interface ValidateCouponRequest {
+  couponCode: string;
+  productId: string;
+  quantity: number;
+  originalPrice: number;
+}
+
+// Cart DTO'ları
 export interface CartItemDto {
   id: string;
   cartId: string;
@@ -53,8 +146,7 @@ export interface AddCartItemRequest {
   quantity: number;
 }
 
-// API Base URL - Basitleştirilmiş
-// Development modunda hep manuel IP kullan
+// API Base URL 
 const DEVICE_IP = '192.168.1.80'; // Bilgisayarın Wi-Fi IP'si
 const API_PORT = '5222';
 
@@ -75,15 +167,6 @@ const CACHE_DURATION = 5 * 60 * 1000;
 // Global API çağrısı fonksiyonu - ServiceResponse formatını handle eder
 export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?: any): Promise<ServiceResponse<T>> => {
   try {
-    // Debug için URL'yi logla
-    const fullUrl = `${API_BASE_URL}${endpoint}`;
-    console.log(`🔵 API Call: ${method} ${fullUrl}`);
-    
-    // Body'yi logla
-    if (body) {
-      console.log('🔵 Request Body:', JSON.stringify(body, null, 2));
-    }
-    
     // Token'ı AsyncStorage'dan al
     const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
     
@@ -94,50 +177,31 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
     // Token varsa Authorization header'ını ekle
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
-      console.log('🔵 Token added to headers');
-    } else {
-      console.log('❌ No token found');
     }
 
-    console.log('🔵 Request Headers:', headers);
-    console.log('🔵 Sending request...');
-    const response = await fetch(fullUrl, {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    console.log(`🔴 Response Status: ${response.status} ${response.statusText}`);
-
-    // Response body'yi al - önce text olarak al, sonra JSON parse et
     const responseText = await response.text();
-    console.log('🔴 Response Text:', responseText);
 
-    // 400 hatasında extra debug
     if (response.status === 400) {
-      console.log('❌ 400 BAD REQUEST DETAILS:');
-      console.log('❌ Request URL:', fullUrl);
-      console.log('❌ Request Method:', method);
-      console.log('❌ Request Body:', body ? JSON.stringify(body, null, 2) : 'No body');
-      console.log('❌ Response:', responseText);
+      // 400 hatalarını sessizce geç
     }
 
     let responseData;
     try {
       // Boş response kontrolü
       if (!responseText || responseText.trim() === '') {
-        console.log('Empty response received, treating as success');
         responseData = { success: true, value: true };
       } else {
         responseData = JSON.parse(responseText);
       }
     } catch (parseError) {
-      console.error('❌ JSON Parse Error:', parseError);
-      console.log('Response was not valid JSON:', responseText);
-      
       // Boş response kontrolü
       if (!responseText || responseText.trim() === '') {
-        console.log('Empty response but status OK, treating as success');
         responseData = { success: true, value: true };
       } else {
         // JSON parse edilemezse error döndür
@@ -148,17 +212,12 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
         };
       }
     }
-    
-    console.log('Response Data:', responseData);
 
     if (!response.ok) {
-      console.log(`API Error - Status: ${response.status}`);
-      
       // 401 Unauthorized durumunda token'ı temizle
       if (response.status === 401) {
         await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
         await AsyncStorage.removeItem('@user_data');
-        console.log('Token cleared due to 401 error');
       }
       
       // ServiceResponse formatında hata döndür
@@ -170,17 +229,13 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
     }
 
     // Başarılı response - ServiceResponse formatında döndür
-    // API'den gelen format: { result: { success, value, errorMessage } }
     if (responseData.result) {
-      console.log('ServiceResponse format detected in result wrapper');
       return responseData.result as ServiceResponse<T>;
     } else if (responseData.success !== undefined) {
       // Zaten ServiceResponse formatında
-      console.log('ServiceResponse format detected');
       return responseData as ServiceResponse<T>;
     } else {
       // Düz data gelmiş, ServiceResponse formatına çevir
-      console.log('Converting to ServiceResponse format');
       return {
         value: responseData,
         success: true,
@@ -188,8 +243,6 @@ export const apiCall = async <T>(endpoint: string, method: string = 'GET', body?
       };
     }
   } catch (error) {
-    console.error(`❌ API Call Error (${endpoint}):`, error);
-    
     // Network veya parse hatası
     return {
       value: null as T,
@@ -297,7 +350,6 @@ export const CategoryAPI = {
         if (isCacheValid) {
           const cachedCategories = await AsyncStorage.getItem(CATEGORIES_CACHE_KEY);
           if (cachedCategories) {
-            console.log('✅ Loading categories from cache');
             return {
               success: true,
               value: JSON.parse(cachedCategories),
@@ -308,14 +360,12 @@ export const CategoryAPI = {
       }
 
       // Cache yoksa, geçersizse veya forceRefresh true ise API'den çek
-      console.log(forceRefresh ? '🔄 Force refreshing categories from API' : '🌐 Fetching categories from API');
       const response = await apiCall<CategoryDto[]>('/Category');
       
       // Başarılı response'u cache'e kaydet
       if (response.success && response.value) {
         await AsyncStorage.setItem(CATEGORIES_CACHE_KEY, JSON.stringify(response.value));
         await AsyncStorage.setItem(CACHE_EXPIRY_KEY, (Date.now() + CACHE_DURATION).toString());
-        console.log('Categories cached successfully');
       }
       
       return response;
@@ -341,7 +391,6 @@ export const CategoryAPI = {
     // Başarılı create işleminden sonra cache'i temizle
     if (response.success) {
       await CategoryAPI.clearCache();
-      console.log('Cache cleared after category creation');
     }
     
     return response;
@@ -354,7 +403,6 @@ export const CategoryAPI = {
     // Başarılı update işleminden sonra cache'i temizle
     if (response.success) {
       await CategoryAPI.clearCache();
-      console.log('✅ Cache cleared after category update');
     }
     
     return response;
@@ -367,26 +415,23 @@ export const CategoryAPI = {
     // Başarılı delete işleminden sonra cache'i temizle
     if (response.success) {
       await CategoryAPI.clearCache();
-      console.log('✅ Cache cleared after category deletion');
     }
     
     return response;
   }
 };
 
-// Product API'leri - ServiceResponse formatını kullanır + Cache mekanizması
+// Product API
 export const ProductAPI = {
-  // Tüm ürünleri getir (cache'li)
+  // (cache'li)
   getAll: async (forceRefresh: boolean = false): Promise<ServiceResponse<any[]>> => {
     try {
       // ForceRefresh true ise cache'i atla
       if (!forceRefresh) {
-        // Önce cache'e bak
         const isCacheValid = await CategoryAPI.isCacheValid();
         if (isCacheValid) {
           const cachedProducts = await AsyncStorage.getItem(PRODUCTS_CACHE_KEY);
           if (cachedProducts) {
-            console.log('✅ Loading products from cache');
             return {
               success: true,
               value: JSON.parse(cachedProducts),
@@ -397,14 +442,12 @@ export const ProductAPI = {
       }
 
       // Cache yoksa, geçersizse veya forceRefresh true ise API'den çek
-      console.log(forceRefresh ? '🔄 Force refreshing products from API' : '🌐 Fetching products from API');
       const response = await apiCall<any[]>('/Product');
       
       // Başarılı response'u cache'e kaydet
       if (response.success && response.value) {
         await AsyncStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify(response.value));
         await AsyncStorage.setItem(CACHE_EXPIRY_KEY, (Date.now() + CACHE_DURATION).toString());
-        console.log('Products cached successfully');
       }
       
       return response;
@@ -447,7 +490,6 @@ export const ProductAPI = {
     // Başarılı create işleminden sonra cache'i temizle
     if (response.success) {
       await ProductAPI.clearCache();
-      console.log('✅ Cache cleared after product creation');
     }
     
     return response;
@@ -476,7 +518,6 @@ export const ProductAPI = {
     // Başarılı update işleminden sonra cache'i temizle
     if (response.success) {
       await ProductAPI.clearCache();
-      console.log('Cache cleared after product update');
     }
     
     return response;
@@ -489,7 +530,6 @@ export const ProductAPI = {
     // Başarılı delete işleminden sonra cache'i temizle
     if (response.success) {
       await ProductAPI.clearCache();
-      console.log('✅ Cache cleared after product deletion');
     }
     
     return response;
@@ -569,7 +609,6 @@ export const CartAPI = {
       if (cachedData && cachedExpiry) {
         const expiryTime = parseInt(cachedExpiry);
         if (Date.now() < expiryTime) {
-          console.log('📦 Cart cache hit');
           return {
             value: JSON.parse(cachedData),
             success: true
@@ -577,14 +616,12 @@ export const CartAPI = {
         }
       }
       
-      console.log('🌐 Cart cache miss, fetching from API');
       const response = await apiCall<CartDto>('/Cart');
       
       // Başarılı response'u cache'le
       if (response.success && response.value) {
         await AsyncStorage.setItem(cacheKey, JSON.stringify(response.value));
         await AsyncStorage.setItem(expiryKey, (Date.now() + CACHE_DURATION).toString());
-        console.log('💾 Cart cached successfully');
       }
       
       return response;
@@ -599,31 +636,37 @@ export const CartAPI = {
   },
 
   // Sepete ürün ekle
-  addToCart: async (productId: string, quantity: number): Promise<ServiceResponse<boolean>> => {
+  addToCart: async (productId: string, quantity: number, couponCode?: string): Promise<ServiceResponse<boolean>> => {
     try {
-      console.log('🛒 CartAPI.addToCart called with:', { productId, quantity });
+      let endpoint: string;
+      let requestBody: any;
       
-      const requestBody = { 
-        productId, 
-        quantity 
-      };
-      console.log('📦 Request body:', requestBody);
+      // Kupon kodu varsa kuponlu endpoint, yoksa kuponsuz endpoint kullan
+      if (couponCode && couponCode.trim() !== '') {
+        endpoint = '/Cart/add-item-with-coupon';
+        requestBody = { 
+          productId, 
+          quantity,
+          couponCode: couponCode.trim()
+        };
+      } else {
+        endpoint = '/Cart/add-item';
+        requestBody = { 
+          productId, 
+          quantity
+        };
+      }
       
-      const response = await apiCall<boolean>('/Cart/add-item', 'POST', requestBody);
-      console.log('📨 API Response:', response);
+      const response = await apiCall<boolean>(endpoint, 'POST', requestBody);
       
       // Başarılı işlemde cache'i temizle
       if (response.success) {
         await AsyncStorage.removeItem(CART_CACHE_KEY);
         await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
-        console.log('🗑️ Cart cache cleared after add');
-      } else {
-        console.error('❌ API returned error:', response.errorMessage);
       }
       
       return response;
     } catch (error) {
-      console.error('❌ Error in CartAPI.addToCart:', error);
       return {
         value: false,
         success: false,
@@ -641,12 +684,10 @@ export const CartAPI = {
       if (response.success) {
         await AsyncStorage.removeItem(CART_CACHE_KEY);
         await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
-        console.log('🗑️ Cart cache cleared after remove');
       }
       
       return response;
     } catch (error) {
-      console.error('Error in CartAPI.removeFromCart:', error);
       return {
         value: false,
         success: false,
@@ -664,12 +705,10 @@ export const CartAPI = {
       if (response.success) {
         await AsyncStorage.removeItem(CART_CACHE_KEY);
         await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
-        console.log('🗑️ Cart cache cleared after clear');
       }
       
       return response;
     } catch (error) {
-      console.error('Error in CartAPI.clearCart:', error);
       return {
         value: false,
         success: false,
@@ -694,6 +733,7 @@ export const OrderAPI = {
     items: {
       productId: string;
       quantity: number;
+      price: number; // Cart item'ın birim fiyatı
     }[];
   }): Promise<ServiceResponse<string>> => {
     try {
@@ -777,6 +817,7 @@ export const OrderAPI = {
     items: {
       productId: string;
       quantity: number;
+      price: number; // Cart item'ın birim fiyatı
     }[];
   }): Promise<{ success: boolean; orderId?: string; message?: string }> => {
     const response = await OrderAPI.createOrder(orderData);
@@ -928,6 +969,84 @@ export const UserAPI = {
       success: response.success,
       message: response.success ? undefined : response.errorMessage
     };
+  }
+};
+
+// Coupon API
+export const CouponAPI = {
+  // Kupon oluştur
+  create: async (couponData: CreateCouponDto): Promise<ServiceResponse<CouponDto>> => {
+    try {
+      // Kullanıcı profilini getir
+      const userProfile = await UserAPI.getProfile();
+      
+      if (!userProfile.success || !userProfile.value) {
+        return {
+          success: false,
+          value: {} as CouponDto,
+          errorMessage: 'User profile not found'
+        };
+      }
+
+      // CreatedBy alanını ekle
+      const dataWithCreatedBy = {
+        ...couponData,
+        createdBy: userProfile.value.id
+      };
+
+      return await apiCall<CouponDto>('/coupon', 'POST', dataWithCreatedBy);
+    } catch (error) {
+      return {
+        success: false,
+        value: {} as CouponDto,
+        errorMessage: 'Error creating coupon'
+      };
+    }
+  },
+
+  // Kendi kuponlarını getir
+  getMyCoupons: async (): Promise<ServiceResponse<CouponDto[]>> => {
+    return await apiCall<CouponDto[]>('/coupon/my-coupons');
+  },
+
+  // Kupon güncelle
+  update: async (couponData: UpdateCouponDto): Promise<ServiceResponse<CouponDto>> => {
+    try {
+      // Kullanıcı profilini getir
+      const userProfile = await UserAPI.getProfile();
+      
+      if (!userProfile.success || !userProfile.value) {
+        return {
+          success: false,
+          value: {} as CouponDto,
+          errorMessage: 'User profile not found'
+        };
+      }
+
+      // CreatedBy alanını ekle
+      const dataWithCreatedBy = {
+        ...couponData,
+        createdBy: userProfile.value.id
+      };
+
+      return await apiCall<CouponDto>('/coupon', 'PUT', dataWithCreatedBy);
+    } catch (error) {
+      return {
+        success: false,
+        value: {} as CouponDto,
+        errorMessage: 'Error updating coupon'
+      };
+    }
+  },
+
+  // Kupon sil
+  delete: async (couponId: string): Promise<ServiceResponse<boolean>> => {
+    return await apiCall<boolean>(`/coupon/${couponId}`, 'DELETE');
+  },
+
+  // Kupon doğrula
+  validate: async (request: ValidateCouponRequest): Promise<ServiceResponse<CouponValidationResult>> => {
+    return await apiCall<CouponValidationResult>('/coupon/validate', 'POST', request);
   }
 };
 

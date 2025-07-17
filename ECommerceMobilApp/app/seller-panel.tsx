@@ -55,6 +55,14 @@ export default function SellerPanelScreen() {
       onPress: () => router.push('/seller/add-product')
     },
     {
+      id: 'coupons',
+      title: 'Kupon Yönetimi',
+      subtitle: 'Ürünleriniz için kupon oluşturun',
+      icon: 'ticket-outline',
+      color: '#FF6B35',
+      onPress: () => router.push('/seller/coupons')
+    },
+    {
       id: 'orders',
       title: 'Siparişler',
       subtitle: 'Gelen siparişleri görüntüleyin',

@@ -11,6 +11,7 @@ export default function SellerLayout() {
         }}
       >
         <Stack.Screen name="add-product" options={{ headerShown: false }} />
+        <Stack.Screen name="coupons" options={{ headerShown: false }} />
         <Stack.Screen name="edit-product" options={{ headerShown: false }} />
         <Stack.Screen name="my-products" options={{ headerShown: false }} />
       </Stack>

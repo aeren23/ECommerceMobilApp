@@ -32,17 +32,14 @@ export default function HomeScreen() {
   // Kategorileri API'den yükle - cache'ten yüklensin çünkü kategoriler daha az değişir
   const loadCategories = async (forceRefresh: boolean = false) => {
     try {
-      console.log(forceRefresh ? 'Refreshing categories...' : 'Loading categories...');
       const response = await CategoryAPI.getAll(forceRefresh);
       
       if (response.success && response.value) {
-        console.log('Categories loaded successfully:', response.value.length, 'categories');
         setCategoriesData(response.value);
         // Kategori listesini güncelle - "Tümü" seçeneğini ekle
         const categoryNames = ['Tümü', ...response.value.map(cat => cat.name)];
         setCategories(categoryNames);
       } else {
-        console.error('Categories load failed:', response.errorMessage);
         // Varsayılan kategoriler kalsın
         setCategories([
           'Tümü',
@@ -57,7 +54,6 @@ export default function HomeScreen() {
         ]);
       }
     } catch (error) {
-      console.error('Categories load error:', error);
       // Varsayılan kategoriler kalsın
       setCategories([
         'Tümü',
@@ -75,14 +71,12 @@ export default function HomeScreen() {
 
   // İlk yükleme - sadece component mount olduğunda
   useEffect(() => {
-    console.log('📱 HomeScreen mounted - Loading initial data...');
     loadCategories(false); // Kategoriler için cache kullan
   }, []); // Boş dependency array - sadece mount'ta çalışır
 
   // Sayfa her açıldığında fresh products yükle
   useFocusEffect(
     useCallback(() => {
-      console.log('HomeScreen focused - Refreshing products...');
       loadProducts(true); // Her zaman fresh data çek
     }, [])
   );
@@ -91,19 +85,15 @@ export default function HomeScreen() {
   const loadProducts = async (forceRefresh: boolean = true) => {
     try {
       setIsLoading(true);
-      console.log(forceRefresh ? 'Loading fresh products...' : 'Loading products...');
       const response = await ProductAPI.getAll(forceRefresh);
       
       if (response.success && response.value) {
-        console.log('Products loaded successfully:', response.value.length, 'products');
         setProducts(response.value);
         setFilteredProducts(response.value);
       } else {
-        console.error('Failed to load products:', response.errorMessage);
         Alert.alert('Hata', 'Ürünler yüklenirken bir hata oluştu');
       }
     } catch (error) {
-      console.error('Error loading products:', error);
       Alert.alert('Hata', 'Ürünler yüklenirken bir hata oluştu');
     } finally {
       setIsLoading(false);
@@ -148,20 +138,15 @@ export default function HomeScreen() {
 
   // Hızlı sepete ekleme fonksiyonu
   const handleQuickAddToCart = async (product: Product) => {
-    console.log('🛒 handleQuickAddToCart called for product:', product.id);
-    
     if (product.stock === 0) {
       Alert.alert('Uyarı', 'Bu ürün stokta bulunmamaktadır.');
       return;
     }
 
     try {
-      console.log('🛒 About to call addToCart...');
       // Backend API'ye sepete ekleme isteği
       await addToCart(product.id, 1);
-      console.log('addToCart completed');
     } catch (error) {
-      console.error('Error in handleQuickAddToCart:', error);
       Alert.alert('Hata', 'Ürün sepete eklenirken bir hata oluştu');
     }
   };
@@ -175,7 +160,7 @@ export default function HomeScreen() {
         await addToWishlist(product.id);
       }
     } catch (error) {
-      console.error('❌ Error toggling wishlist:', error);
+      // Hata durumunda sessizce başarısız ol
     }
   };
 

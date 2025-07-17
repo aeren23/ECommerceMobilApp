@@ -7,7 +7,7 @@ import { useUser } from './UserContext';
 interface CartContextType {
   cart: CartDto | null;
   cartItems: CartItemDto[];
-  addToCart: (productId: string, quantity?: number) => Promise<void>;
+  addToCart: (productId: string, quantity?: number, couponCode?: string) => Promise<void>;
   removeFromCart: (productId: string) => Promise<void>;
   clearCart: () => Promise<void>;
   createOrder: () => Promise<void>;
@@ -84,11 +84,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   // Sepete ürün ekle
-  const addToCart = async (productId: string, quantity: number = 1) => {
-    console.log('🛒 CartContext.addToCart called with:', { productId, quantity, isLoggedIn });
+  const addToCart = async (productId: string, quantity: number = 1, couponCode?: string) => {
+    console.log('CartContext.addToCart called with:', { productId, quantity, couponCode, isLoggedIn });
     
     if (!isLoggedIn) {
-      console.log('❌ User not logged in');
+      console.log('User not logged in');
       Alert.alert('Giriş Gerekli', 'Sepete ürün eklemek için giriş yapmalısınız.');
       return;
     }
@@ -97,20 +97,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       console.log('🛒 Starting cart addition process...');
       
-      const response = await CartAPI.addToCart(productId, quantity);
-      console.log('🛒 Cart API Response:', response);
+      const response = await CartAPI.addToCart(productId, quantity, couponCode);
+      console.log('Cart API Response:', response);
       
       if (response.success) {
         // Sepeti yenile
-        console.log('✅ Product added successfully, refreshing cart...');
+        console.log('Product added successfully, refreshing cart...');
         await loadCart();
         Alert.alert('Başarılı', 'Ürün sepete eklendi!');
       } else {
-        console.error('❌ Failed to add to cart:', response.errorMessage);
+        console.error('Failed to add to cart:', response.errorMessage);
         Alert.alert('Hata', response.errorMessage || 'Ürün sepete eklenemedi');
       }
     } catch (error) {
-      console.error('❌ Error adding to cart:', error);
+      console.error('Error adding to cart:', error);
       Alert.alert('Hata', 'Ürün sepete eklenirken bir hata oluştu');
     } finally {
       setIsLoading(false);
@@ -178,30 +178,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       console.log('🛍️ Creating order from cart...');
       
-      // Backend'in beklediği format
+      // Backend'in beklediği format - artık price bilgisi de gerekli
       const orderData = {
         userId: user.id,
         items: cart.items.map(item => ({
           productId: item.productId,
-          quantity: item.quantity
+          quantity: item.quantity,
+          price: item.price // Cart item'ın birim fiyatı (backend'de kuruş)
         }))
       };
       
-      console.log('📦 Order data:', orderData);
+      console.log('Order data:', orderData);
       
       const response = await OrderAPI.createOrderSimple(orderData);
-      console.log('📨 Order creation response:', response);
+      console.log('Order creation response:', response);
       
       if (response.success) {
-        // API'den sepeti de temizle (cache zaten OrderAPI'de temizlendi)
+        // API'den sepeti de temizle 
         try {
           const clearResponse = await CartAPI.clearCart();
           if (clearResponse.success) {
-            console.log('🗑️ Cart cleared in backend after order creation');
+            console.log('Cart cleared in backend after order creation');
             setCart(null); // Local state'i de temizle
           }
         } catch (clearError) {
-          console.error('❌ Error clearing cart in backend:', clearError);
+          console.error('Error clearing cart in backend:', clearError);
           // Sipariş başarılı oldu ama sepet temizlenemedi, sadece log
         }
         
@@ -247,6 +248,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     console.log('💰 Backend totalPrice:', cart.totalPrice);
     
     if (calculatedTotal !== cart.totalPrice) {
+      console.log('calculatedTotal = ', calculatedTotal);
+      console.log('cart.totalPrice = ', cart.totalPrice);
       console.warn('⚠️ MISMATCH: Frontend and backend totals differ!');
     }
     

@@ -9,6 +9,8 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -17,7 +19,7 @@ import { Product, tagConfig } from '../../data/products';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useUser } from '../../context/UserContext';
-import { ProductAPI } from '../../services/ApiService';
+import { ProductAPI, CouponAPI, ValidateCouponRequest } from '../../services/ApiService';
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -29,10 +31,76 @@ export default function ProductDetailScreen() {
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { isLoggedIn } = useUser();
 
+  // Kupon state'leri
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    type: number;
+    value: number;
+    description: string;
+    discount: number;
+    finalPrice: number;
+  } | null>(null);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+
   // Ürünü API'den yükle
   useEffect(() => {
     loadProduct();
   }, [id]);
+
+  // Quantity değiştiğinde kupon tekrar validate et
+  useEffect(() => {
+    if (appliedCoupon && product) {
+      validateCouponForQuantity();
+    }
+  }, [quantity]);
+
+  const validateCouponForQuantity = async () => {
+    if (!appliedCoupon || !product) return;
+
+    try {
+      const request: ValidateCouponRequest = {
+        couponCode: appliedCoupon.code,
+        productId: product.id,
+        quantity: quantity,
+        originalPrice: product.price * quantity
+      };
+
+      const response = await CouponAPI.validate(request);
+
+      if (response.success && response.value.isValid) {
+        const coupon = response.value.coupon;
+        
+        // DEBUG: Console'da değerleri kontrol et
+        console.log('🔍 Quantity Change Response:', {
+          discountAmount: response.value.discountAmount,
+          finalPrice: response.value.finalPrice,
+          originalPrice: product.price * quantity,
+          quantity: quantity,
+          productPrice: product.price
+        });
+        
+        setAppliedCoupon({
+          code: coupon?.code || appliedCoupon.code,
+          type: coupon?.type || appliedCoupon.type,
+          value: coupon?.value || appliedCoupon.value,
+          description: coupon?.description || appliedCoupon.description,
+          discount: response.value.discountAmount,
+          finalPrice: response.value.finalPrice
+        });
+      } else {
+        // Kupon artık geçerli değilse kaldır
+        setAppliedCoupon(null);
+        setCouponCode('');
+        Alert.alert('Kupon Geçersiz', 'Kupon bu miktar için geçerli değil ve kaldırıldı.');
+      }
+    } catch (error) {
+      console.error('Error revalidating coupon:', error);
+      setAppliedCoupon(null);
+      setCouponCode('');
+    }
+  };
 
   const loadProduct = async () => {
     try {
@@ -53,19 +121,9 @@ export default function ProductDetailScreen() {
     }
   };
 
-  // Kategori adını bul
+  // Kategori adını product'tan çek
   const getCategoryName = (categoryId: string): string => {
-    const nameMap: { [key: string]: string } = {
-      'a1b2c3d4-e5f6-7890-abcd-ef1234567890': 'Elektronik',
-      'b2c3d4e5-f6g7-8901-bcde-f12345678901': 'Giyim',
-      'c3d4e5f6-g7h8-9012-cdef-123456789012': 'Ev & Bahçe',
-      'd4e5f6g7-h8i9-0123-def1-234567890123': 'Spor',
-      'e5f6g7h8-i9j0-1234-ef12-345678901234': 'Kitap',
-      'f6g7h8i9-j0k1-2345-f123-456789012345': 'Kozmetik',
-      'g7h8i9j0-k1l2-3456-1234-567890123456': 'Oyuncak',
-      'h8i9j0k1-l2m3-4567-2345-678901234567': 'Mutfak',
-    };
-    return nameMap[categoryId] || 'Diğer';
+    return product?.category?.name || 'Bilinmeyen Kategori';
   };
   
   // Sepetteki bu ürünün miktarını kontrol et
@@ -128,10 +186,75 @@ export default function ProductDetailScreen() {
     }
 
     // Backend API'ye sepete ekleme isteği
-    await addToCartContext(product.id, quantity);
+    const couponCodeToSend = appliedCoupon ? appliedCoupon.code : undefined;
+    await addToCartContext(product.id, quantity, couponCodeToSend);
 
     // Miktar seçiciyi sıfırla
     setQuantity(1);
+    
+    // Kupon varsa temizle
+    if (appliedCoupon) {
+      setAppliedCoupon(null);
+      setCouponCode('');
+    }
+  };
+
+  // Kupon uygulama fonksiyonu
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      Alert.alert('Uyarı', 'Lütfen kupon kodu girin');
+      return;
+    }
+
+    if (!isLoggedIn) {
+      Alert.alert('Giriş Gerekli', 'Kupon uygulayabilmek için giriş yapmanız gerekiyor');
+      return;
+    }
+
+    if (!product) return;
+
+    setIsValidatingCoupon(true);
+
+    try {
+      const request: ValidateCouponRequest = {
+        couponCode: couponCode.trim(),
+        productId: product.id,
+        quantity: quantity,
+        originalPrice: product.price 
+      };
+
+      const response = await CouponAPI.validate(request);
+
+      if (response.success && response.value.isValid) {
+        const coupon = response.value.coupon;
+        
+        
+        setAppliedCoupon({
+          code: coupon?.code || couponCode.trim(),
+          type: coupon?.type || 1,
+          value: coupon?.value || 0,
+          description: coupon?.description || '',
+          discount: response.value.discountAmount,
+          finalPrice: response.value.finalPrice
+        });
+
+        setShowCouponModal(false);
+        Alert.alert('Başarılı', `Kupon uygulandı! ₺${response.value.discountAmount.toLocaleString()} indirim kazandınız.`);
+      } else {
+        Alert.alert('Kupon Geçersiz', response.value.message || 'Bu kupon bu ürün için geçerli değil.');
+      }
+    } catch (error) {
+      console.error('Coupon validation error:', error);
+      Alert.alert('Hata', 'Kupon doğrulanırken bir hata oluştu');
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  // Kupon kaldırma fonksiyonu
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
   };
 
   // Wishlist toggle fonksiyonu
@@ -278,12 +401,73 @@ export default function ProductDetailScreen() {
             </View>
           </View>
 
+          {/* Kupon Kodu */}
+          <View style={styles.couponContainer}>
+            <Text style={styles.sectionTitle}>Kupon Kodu</Text>
+            <View style={styles.couponInputContainer}>
+              <TextInput
+                style={styles.couponInput}
+                placeholder="Kupon kodunu giriniz"
+                value={couponCode}
+                onChangeText={setCouponCode}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                style={[
+                  styles.couponButton,
+                  (!couponCode || isValidatingCoupon) && styles.disabledButton
+                ]}
+                onPress={handleApplyCoupon}
+                disabled={!couponCode || isValidatingCoupon}
+              >
+                <Text style={styles.couponButtonText}>
+                  {isValidatingCoupon ? 'Kontrol Ediliyor...' : 'Uygula'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {appliedCoupon && (
+              <View style={styles.appliedCouponContainer}>
+                <View style={styles.appliedCouponInfo}>
+                  <Text style={styles.appliedCouponText}>
+                    {appliedCoupon.code} - {appliedCoupon.type === 1 ? `%${appliedCoupon.value}` : `₺${appliedCoupon.value}`}
+                  </Text>
+                  <TouchableOpacity onPress={handleRemoveCoupon} style={styles.removeCouponButton}>
+                    <Text style={styles.removeCouponButtonText}>Kaldır</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.couponDescriptionText}>
+                  {appliedCoupon.description}
+                </Text>
+              </View>
+            )}
+          </View>
+
           {/* Toplam Fiyat */}
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Toplam:</Text>
-            <Text style={styles.totalPrice}>
-              ₺{(product.price * quantity).toLocaleString()}
-            </Text>
+            <View style={styles.couponPriceContainer}>
+              {appliedCoupon && (
+                <Text style={styles.couponOriginalPrice}>
+                  ₺{(product.price * quantity).toLocaleString()}
+                </Text>
+              )}
+              <Text style={styles.totalPrice}>
+                ₺{(appliedCoupon ? appliedCoupon.finalPrice : product.price * quantity).toLocaleString()}
+              </Text>
+              
+              {/* DEBUG: Değerleri göster */}
+              {appliedCoupon && (
+                <View style={{marginTop: 5}}>
+                  <Text style={{fontSize: 10, color: 'red'}}>
+                    DEBUG: finalPrice={appliedCoupon.finalPrice}, discount={appliedCoupon.discount}
+                  </Text>
+                  <Text style={{fontSize: 10, color: 'red'}}>
+                    quantity={quantity}, productPrice={product.price}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -604,5 +788,94 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+  },
+  couponContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    margin: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 12,
+  },
+  couponInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  couponInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: '#f8f9fa',
+  },
+  couponButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  couponButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  appliedCouponContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#e8f5e8',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  appliedCouponInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  appliedCouponText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2e7d32',
+  },
+  removeCouponButton: {
+    backgroundColor: '#f44336',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  removeCouponButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  couponDescriptionText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  couponPriceContainer: {
+    alignItems: 'flex-end',
+  },
+  couponOriginalPrice: {
+    fontSize: 14,
+    color: '#999',
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
   },
 });
