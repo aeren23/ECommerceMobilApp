@@ -722,6 +722,27 @@ export const CartAPI = {
     await AsyncStorage.removeItem(CART_CACHE_KEY);
     await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
     console.log('🗑️ Cart cache manually cleared');
+  },
+
+  // Sepetten sipariş oluştur (kupon kayıtlarını da handle eder)
+  createOrderFromCart: async (): Promise<ServiceResponse<{ orderId: string }>> => {
+    try {
+      const response = await apiCall<{ orderId: string }>('/Cart/create-order', 'POST');
+      
+      // Başarılı işlemde cache'i temizle 
+      if (response.success) {
+        await AsyncStorage.removeItem(CART_CACHE_KEY);
+        await AsyncStorage.removeItem(`${CACHE_EXPIRY_KEY}_cart`);
+      }
+      
+      return response;
+    } catch (error) {
+      return {
+        value: { orderId: '' },
+        success: false,
+        errorMessage: error.message || 'Failed to create order from cart'
+      };
+    }
   }
 };
 

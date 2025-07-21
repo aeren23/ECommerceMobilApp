@@ -178,46 +178,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       console.log('🛍️ Creating order from cart...');
       
-      // Backend'in beklediği format - artık price bilgisi de gerekli
-      const orderData = {
-        userId: user.id,
-        items: cart.items.map(item => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          price: item.price // Cart item'ın birim fiyatı (backend'de kuruş)
-        }))
-      };
-      
-      console.log('Order data:', orderData);
-      
-      const response = await OrderAPI.createOrderSimple(orderData);
-      console.log('Order creation response:', response);
+      // Yeni backend endpoint'ini kullan - sepetten direkt sipariş oluştur
+      // Bu endpoint kupon kullanımlarını da otomatik kaydediyor
+      const response = await CartAPI.createOrderFromCart();
+      console.log('📨 Order creation response:', response);
       
       if (response.success) {
-        // API'den sepeti de temizle 
-        try {
-          const clearResponse = await CartAPI.clearCart();
-          if (clearResponse.success) {
-            console.log('Cart cleared in backend after order creation');
-            setCart(null); // Local state'i de temizle
-          }
-        } catch (clearError) {
-          console.error('Error clearing cart in backend:', clearError);
-          // Sipariş başarılı oldu ama sepet temizlenemedi, sadece log
-        }
+        // Sepet backend'de otomatik temizleniyor, sadece local state'i temizle
+        setCart(null);
         
         Alert.alert(
           'Sipariş Başarılı! 🎉',
-          `Siparişiniz başarıyla oluşturuldu.\nSipariş ID: ${response.orderId}`,
+          `Siparişiniz başarıyla oluşturuldu.\nSipariş ID: ${response.value.orderId}`,
           [
             { text: 'Tamam', onPress: () => console.log('Order completed') }
           ]
         );
       } else {
-        console.error('❌ Order creation failed:', response.message);
+        console.error('❌ Order creation failed:', response.errorMessage);
         Alert.alert(
           'Sipariş Hatası',
-          response.message || 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.'
+          response.errorMessage || 'Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.'
         );
       }
     } catch (error) {
