@@ -335,7 +335,7 @@ Bu proje açık kaynak kodludur. Daha fazla bilgi için [LICENSE](LICENSE) dosya
 
 Proje hakkında sorularınız için:
 - GitHub Issues kullanabilirsiniz
-- Email: [İletişim bilgilerinizi ekleyin]
+- Email: aliherenoguztas@gmail.com
 
 ---
 
